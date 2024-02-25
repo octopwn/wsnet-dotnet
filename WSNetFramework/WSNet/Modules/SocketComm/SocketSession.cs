@@ -12,6 +12,4 @@ namespace WSNet.SocketComm
         public abstract void stop();
     }
 
-
-
 }

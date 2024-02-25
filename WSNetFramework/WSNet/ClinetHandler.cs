@@ -52,6 +52,12 @@ namespace WSNet
             await transport.Send(cmd.to_bytes());
         }
 
+        public async Task sendServerSocketData(byte[] token, CMDSRVSD res)
+        {
+            CMDHeader cmd = new CMDHeader(CMDType.SDSRV, token, res.to_bytes());
+            await transport.Send(cmd.to_bytes());
+        }
+
         public void Stop()
         {
             foreach(SocketSession sess in socketlookup.Values)
@@ -85,7 +91,7 @@ namespace WSNet
                                     //creating TCP client
                                     SocketTCPClientSession socket = new SocketTCPClientSession(cmdhdr, cmd, this);
                                     socketlookup.Add(tokenstr, socket);
-                                    bool res = await socket.connect();
+                                    bool res = await socket.serve();
                                     if (!res)
                                         socketlookup.Remove(tokenstr);
                                 }
@@ -96,7 +102,25 @@ namespace WSNet
                             }
                             else
                             {
-                                throw new Exception("Bind not implemented!");
+                                if(cmd.protocol == "TCP")
+                                {
+                                    if(cmd.bindtype == 1){
+                                        //creating TCP server
+                                        SocketTCPServerSession socket = new SocketTCPServerSession(cmdhdr, cmd, this);
+                                        socketlookup.Add(tokenstr, socket);
+                                        bool res = await socket.bind();
+                                        if (!res)
+                                            socketlookup.Remove(tokenstr);
+                                    }
+                                    else
+                                    {
+                                        throw new Exception("UDP server not implemented!");
+                                    }
+                                }
+                                else
+                                {
+                                    throw new Exception("UDP server not implemented!");
+                                }
                             }
                             break;
                         }
