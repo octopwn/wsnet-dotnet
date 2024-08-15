@@ -91,7 +91,7 @@ namespace WSNet
                                     //creating TCP client
                                     SocketTCPClientSession socket = new SocketTCPClientSession(cmdhdr, cmd, this);
                                     socketlookup.Add(tokenstr, socket);
-                                    bool res = await socket.serve();
+                                    bool res = await socket.connect();
                                     if (!res)
                                         socketlookup.Remove(tokenstr);
                                 }
@@ -106,11 +106,13 @@ namespace WSNet
                                 {
                                     if(cmd.bindtype == 1){
                                         //creating TCP server
-                                        SocketTCPServerSession socket = new SocketTCPServerSession(cmdhdr, cmd, this);
-                                        socketlookup.Add(tokenstr, socket);
-                                        bool res = await socket.bind();
-                                        if (!res)
-                                            socketlookup.Remove(tokenstr);
+                                        //SocketTCPServerSession socket = new SocketTCPServerSession(cmdhdr, cmd, this);
+                                        //socketlookup.Add(tokenstr, socket);
+                                        //bool res = await socket.bind();
+                                        //if (!res)
+                                        //    socketlookup.Remove(tokenstr);
+                                        throw new Exception("TCP server not implemented!");
+
                                     }
                                     else
                                     {

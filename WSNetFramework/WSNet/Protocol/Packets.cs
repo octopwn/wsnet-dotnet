@@ -476,7 +476,7 @@ namespace WSNet
         public byte[] to_bytes()
         {
             byte[] bconnToken = ParseUtils.writeBytes(connectiontoken);
-            byte[] biptype = ParseUtils.writeUShort(iptype);
+            byte[] biptype = ParseUtils.writeUShort((ushort)iptype);
             byte[] bip;
             try{
                 IPAddress ip = IPAddress.Parse(this.ip);
@@ -493,40 +493,7 @@ namespace WSNet
 
         static public CMDSRVSD parse(byte[] data)
         {
-            int ptr = 0;
-            CMDConnect cmd = new CMDConnect();
-            byte[] pb = new byte[3];
-            Array.Copy(data, pb, 3);
-            cmd.protocol = Encoding.ASCII.GetString(pb);
-            if (data[3] == 0) cmd.bind = false;
-            else cmd.bind = true;
-            cmd.iptype = data[4];
-            if (cmd.iptype == 4)
-            {
-                byte[] bip = new byte[4];
-                Array.Copy(data, 5, bip, 0, 4);
-                cmd.ip = new IPAddress(bip).ToString();
-                cmd.port = (int)ParseUtils.readUshort(data, 9);
-                ptr = 11;
-            }
-            else if (cmd.iptype == 6)
-            {
-                byte[] bip = new byte[16];
-                Array.Copy(data, 5, bip, 0, 16);
-                cmd.ip = new IPAddress(bip).ToString();
-                cmd.port = (int)ParseUtils.readUshort(data, 22);
-                ptr = 24;
-            }
-            else if (cmd.iptype == 0xff)
-            {
-                cmd.ip = ParseUtils.readString(data, 5);
-                cmd.port = (int)ParseUtils.readUshort(data, 9 + cmd.ip.Length);
-                ptr = 11 + cmd.ip.Length;
-            }
-            else throw new Exception("Unknown IP type " + cmd.iptype.ToString());
-            cmd.bindtype = data[ptr];
-
-            return cmd;
+            throw new Exception("TODO");
         }
 
     }
