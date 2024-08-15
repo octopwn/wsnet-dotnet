@@ -35,5 +35,5 @@ jobs:
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:
-        name: WSNetFramework
-        path: WSNetFramework\bin\Release\wsnet.exe
+        name: wsnet_dotnet
+        path: WSNetFramework\bin\Release\WSNetFramework.exe
