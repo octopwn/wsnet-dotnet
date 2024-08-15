@@ -16,9 +16,9 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
     
-    - name: Install .NET Framework 4.5 Developer Pack
+    - name: Install .NET Framework 4.7.2 Developer Pack
       run: |
-        choco install netfx-4.5.2-devpack --ignore-checksums -y
+        choco install netfx-4.7.2-devpack --ignore-checksums -y
 
     - name: Setup NuGet
       uses: NuGet/setup-nuget@v1
