@@ -1,0 +1,35 @@
+name: Build .NET Framework 4.7 Project
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup NuGet
+      uses: NuGet/setup-nuget@v1
+
+    - name: Restore NuGet packages
+      run: nuget restore WSNetFramework.sln
+
+    - name: Setup .NET Framework
+      uses: microsoft/setup-msbuild@v1
+
+    - name: Build project
+      run: msbuild WSNetFramework.sln /p:Configuration=Release /p:Platform="Any CPU"
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: WSNetFramework
+        path: WSNetFramework\bin\Release\wsnet.exe
