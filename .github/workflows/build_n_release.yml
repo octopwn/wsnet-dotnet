@@ -7,6 +7,9 @@ on:
   pull_request:
     branches:
       - main
+  release:
+    types:
+      - created
 
 jobs:
   build:
@@ -37,3 +40,11 @@ jobs:
       with:
         name: wsnet_dotnet
         path: WSNetFramework\bin\Release\WSNetFramework.exe
+
+    - name: Create Release and Upload Asset
+      uses: softprops/action-gh-release@v1
+      if: github.event_name == 'release'
+      with:
+        files: WSNetFramework\bin\Release\WSNetFramework.exe
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
