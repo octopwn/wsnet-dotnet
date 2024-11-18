@@ -76,6 +76,8 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="WSNet\ClinetHandler.cs" />
     <Compile Include="WSNet\Modules\BasicInfo.cs" />
+    <Compile Include="WSNet\Modules\Fileops\Fileops.cs" />
+    <Compile Include="WSNet\Modules\SocketComm\DNSResolver.cs" />
     <Compile Include="WSNet\Modules\SocketComm\SocketSession.cs" />
     <Compile Include="WSNet\Modules\SocketComm\SocketTCPClientSession.cs" />
     <Compile Include="WSNet\Modules\SocketComm\SocketUDPClientSession.cs" />

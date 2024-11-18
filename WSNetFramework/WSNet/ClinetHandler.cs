@@ -4,6 +4,13 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using WSNet.SocketComm;
 using WSNet.SSPIProxy;
+using System.Net;
+using System.Linq;
+using System.Net.Sockets;
+using WSNetFramework.WSNet.Modules.SocketComm;
+using System.IO;
+using WSNetFramework.WSNet.Modules.Fileops;
+using System.Diagnostics;
 
 namespace WSNet
 {
@@ -12,6 +19,8 @@ namespace WSNet
         Transport transport;
         Dictionary<string, SocketSession> socketlookup = new Dictionary<string, SocketSession>();
         Dictionary<string, SSPISession> sspilookup = new Dictionary<string, SSPISession>();
+        Dictionary<string, FileStream> filelookup = new Dictionary<string, FileStream>();
+        Dictionary<string, string> filenamelookup = new Dictionary<string, string>();
         public CancellationTokenSource cts = new CancellationTokenSource();
 
         public async Task run(Transport transport)
@@ -24,9 +33,10 @@ namespace WSNet
             await transport.Send(rawmessage);
         }
 
-        public async Task sendOk()
+        public async Task sendOk(byte[] token)
         {
-
+            CMDHeader okhdr = new CMDHeader(CMDType.OK, token, new byte[0]);
+            await transport.Send(okhdr.to_bytes());
         }
 
         public async Task sendContinue(byte[] token)
@@ -256,6 +266,216 @@ namespace WSNet
                             await sendRaw(hdr.to_bytes());
                             break;
                         }
+                    case CMDType.RESOLV:
+                        {
+                            CMDResolv result = new CMDResolv();
+                            CMDResolv packet = CMDResolv.parse(cmdhdr.data);
+                            result.ip_or_hostname = await DNSResolver.ResolveAsync(packet.ip_or_hostname);
+                            CMDHeader hdr = new CMDHeader(CMDType.RESOLV, cmdhdr.token, result.to_bytes());
+                            await sendRaw(hdr.to_bytes());
+                            break;
+                        }
+                    case CMDType.DIRRM:
+                        {
+                            CMDDirRM packet = CMDDirRM.parse(cmdhdr.data);
+                            try
+                            {
+                                if (Directory.Exists(packet.path))
+                                {
+                                    Directory.Delete(packet.path, true);
+                                }
+                                await sendOk(cmdhdr.token);
+                            }
+                            catch (Exception e)
+                            {
+                                await sendErr(cmdhdr.token, "Error! " + e.ToString());
+                            }
+                            break;
+                        }
+                    case CMDType.DIRMK:
+                        {
+                            CMDDirMK packet = CMDDirMK.parse(cmdhdr.data);
+                            try
+                            {
+                                if (!Directory.Exists(packet.path))
+                                {
+                                    // Create the directory
+                                    Directory.CreateDirectory(packet.path);
+                                }
+                                await sendOk(cmdhdr.token);
+                            }
+                            catch (Exception e)
+                            {
+                                await sendErr(cmdhdr.token, "Error! " + e.ToString());
+                            }
+                            break;
+                        }
+                    case CMDType.DIRCOPY:
+                        {
+                            CMDDirCopy packet = CMDDirCopy.parse(cmdhdr.data);
+                            try
+                            {
+                                Fileops.CopyDirectory(packet.srcpath, packet.dstpath);
+                                await sendOk(cmdhdr.token);
+                            }
+                            catch (Exception e)
+                            {
+                                await sendErr(cmdhdr.token, "Error! " + e.ToString());
+                            }
+                            break;
+                        }
+                    case CMDType.DIRMOVE:
+                        {
+                            CMDDirMove packet = CMDDirMove.parse(cmdhdr.data);
+                            try
+                            {
+                                Fileops.MoveDirectory(packet.srcpath, packet.dstpath);
+                                await sendOk(cmdhdr.token);
+                            }
+                            catch (Exception e)
+                            {
+                                await sendErr(cmdhdr.token, "Error! " + e.ToString());
+                            }
+                            break;
+                        }
+                    case CMDType.DIRLS:
+                        {
+                            CMDDirLS packet = CMDDirLS.parse(cmdhdr.data);
+                            foreach (WSNFileEntry fe in Fileops.ListDirectoryContents(packet.path))
+                            {
+                                CMDHeader hdr = new CMDHeader(CMDType.FILEENTRY, cmdhdr.token, fe.to_bytes());
+                                await sendRaw(hdr.to_bytes());
+                            }
+                            break;
+                        }
+                    case CMDType.FILECOPY:
+                        {
+                            try
+                            {
+                                CMDFileCopy packet = CMDFileCopy.parse(cmdhdr.data);
+                                File.Copy(packet.srcpath, packet.dstpath, true);
+                                await sendOk(cmdhdr.token);
+                                
+                            }
+                            catch (Exception e)
+                            {
+                                await sendErr(cmdhdr.token, "Error! " + e.ToString());
+                            }
+                            break;
+                        }
+                    case CMDType.FILEMOVE:
+                        {
+                            try
+                            {
+                                CMDFileMove packet = CMDFileMove.parse(cmdhdr.data);
+                                File.Move(packet.srcpath, packet.dstpath);
+                                await sendOk(cmdhdr.token);
+
+                            }
+                            catch (Exception e)
+                            {
+                                await sendErr(cmdhdr.token, "Error! " + e.ToString());
+                            }
+                            break;
+                        }
+                    case CMDType.FILERM:
+                        {
+                            try
+                            {
+                                CMDFileRM packet = CMDFileRM.parse(cmdhdr.data);
+                                File.Delete(packet.path);
+                                await sendOk(cmdhdr.token);
+                            }
+                            catch (Exception e)
+                            {
+                                await sendErr(cmdhdr.token, "Error! " + e.ToString());
+                            }
+                            break;
+                        }
+                    case CMDType.FILEOPEN:
+                        {
+                            try
+                            {
+                                CMDFileOpen packet = CMDFileOpen.parse(cmdhdr.data);
+                                FileMode fileMode = FileMode.Open;
+                                FileStream temp = File.Open(packet.path, fileMode);
+                                filelookup.Add(tokenstr, temp);
+                                filenamelookup.Add(tokenstr, packet.path);
+                                await sendContinue(cmdhdr.token);
+                            }
+                            catch (Exception e)
+                            {
+                                await sendErr(cmdhdr.token, "Error! " + e.ToString());
+                            }
+                            break;
+                        }
+                    case CMDType.FILEREAD:
+                        {
+                            try
+                            {
+                                CMDFileRead packet = CMDFileRead.parse(cmdhdr.data);
+                                FileStream temp;
+                                if (!filelookup.TryGetValue(tokenstr, out temp))
+                                {
+                                    await sendErr(cmdhdr.token, "File not opened for token! ");
+                                }
+                                temp.Seek((long)packet.offset, SeekOrigin.Begin);
+                                CMDFileData res = new CMDFileData();
+                                res.data = new byte[packet.size];
+                                temp.Read(res.data, 0, res.data.Length);
+                                res.offset = packet.offset;
+                                CMDHeader hdr = new CMDHeader(CMDType.FILEDATA, cmdhdr.token, res.to_bytes());
+                                await sendRaw(hdr.to_bytes());
+                            }
+                            catch (Exception e)
+                            {
+                                await sendErr(cmdhdr.token, "Error! " + e.ToString());
+                            }
+                            break;
+                        }
+                    case CMDType.FILEDATA:
+                        {
+                            try
+                            {
+                                CMDFileData packet = CMDFileData.parse(cmdhdr.data);
+                                FileStream temp;
+                                if (!filelookup.TryGetValue(tokenstr, out temp))
+                                {
+                                    await sendErr(cmdhdr.token, "File not opened for token! ");
+                                }
+                                temp.Seek((long)packet.offset, SeekOrigin.Begin);
+                                temp.Write(packet.data, 0, packet.data.Length);
+                                await sendContinue(cmdhdr.token);
+                            }
+                            catch (Exception e)
+                            {
+                                await sendErr(cmdhdr.token, "Error! " + e.ToString());
+                            }
+                            break;
+                        }
+                    case CMDType.FILESTAT:
+                        {
+                            try
+                            {
+                                CMDFileStat packet = CMDFileStat.parse(cmdhdr.data);
+                                string path;
+                                if (!filenamelookup.TryGetValue(tokenstr, out path))
+                                {
+                                    await sendErr(cmdhdr.token, "File not opened for token! ");
+                                }
+                                WSNFileEntry fe = WSNFileEntry.fromFileInfo(new FileInfo(path));
+                                CMDHeader hdr = new CMDHeader(CMDType.FILEENTRY, cmdhdr.token, fe.to_bytes());
+                                await sendRaw(hdr.to_bytes());
+                            }
+                            catch (Exception e)
+                            {
+                                await sendErr(cmdhdr.token, "Error! " + e.ToString());
+                            }
+
+                            break;
+                        } 
+
+
                     default:
                         {
                             Console.WriteLine("Unexpected command recieved! Type: " + cmdhdr.type.ToString());

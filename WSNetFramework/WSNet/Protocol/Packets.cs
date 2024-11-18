@@ -1,6 +1,10 @@
-﻿using System;
+using System;
 using System.Text;
 using System.Net;
+using System.Collections.Generic;
+using System.IO;
+using System.Xml.Linq;
+using System.CodeDom;
 
 namespace WSNet
 {
@@ -30,6 +34,21 @@ namespace WSNet
         SEQUENCEREPLY = 20,
 
         SDSRV = 200,
+        RESOLV = 202,
+
+        DIRLS = 300,
+        DIRMK = 301,
+        DIRRM = 302,
+        DIRCOPY = 303,
+        DIRMOVE = 304,
+        FILEOPEN = 305,
+        FILEREAD = 306,
+        FILEDATA = 307,
+        FILEENTRY = 308,
+        FILECOPY = 309,
+        FILEMOVE = 310,
+        FILERM = 311,
+        FILESTAT = 312,
     }
     class CMDHeader
     {
@@ -478,16 +497,18 @@ namespace WSNet
             byte[] bconnToken = ParseUtils.writeBytes(connectiontoken);
             byte[] biptype = ParseUtils.writeUShort((ushort)iptype);
             byte[] bip;
-            try{
+            try
+            {
                 IPAddress ip = IPAddress.Parse(this.ip);
                 bip = ip.GetAddressBytes();
             }
-            catch (Exception e){
+            catch (Exception e)
+            {
                 bip = ParseUtils.writeString(this.ip);
             }
 
             byte[] bport = ParseUtils.writeUShort((ushort)port);
-            byte[][] rest = { bconnToken, biptype, bip, bport, data};
+            byte[][] rest = { bconnToken, biptype, bip, bport, data };
             return ParseUtils.Combine(rest);
         }
 
@@ -497,4 +518,428 @@ namespace WSNet
         }
 
     }
+
+    class CMDResolv
+    {
+        public List<string> ip_or_hostname;
+
+        public CMDResolv()
+        {
+
+        }
+
+        public byte[] to_bytes()
+        {
+            using (MemoryStream ms = new MemoryStream())
+            {
+                byte[] count = ParseUtils.writeUint32((uint)ip_or_hostname.Count);
+                ms.Write(count, 0, count.Length);
+                ParseUtils.writeStringListToStream(ms, ip_or_hostname);
+                return ms.ToArray();
+            }
+            
+        }
+
+        static public CMDResolv parse(byte[] data)
+        {
+            using (MemoryStream ms = new MemoryStream(data))
+            {
+                var res = new CMDResolv();
+                res.ip_or_hostname = ParseUtils.readStringListFromStream(ms);
+                return res;
+            }
+            
+        }
+
+    }
+
+    class CMDDirCopy
+    {
+        public string srcpath;
+        public string dstpath;
+
+        public CMDDirCopy()
+        {
+
+        }
+
+        public byte[] to_bytes()
+        {
+            //TODO
+            return new byte[0];
+        }
+
+        static public CMDDirCopy parse(byte[] data)
+        {
+            using (MemoryStream ms = new MemoryStream(data))
+            {
+                var res = new CMDDirCopy();
+                res.srcpath = ParseUtils.readString(ms);
+                res.dstpath = ParseUtils.readString(ms);
+                return res;
+            }
+
+        }
+
+    }
+
+    class CMDDirMove
+    {
+        public string srcpath;
+        public string dstpath;
+
+        public CMDDirMove()
+        {
+
+        }
+
+        public byte[] to_bytes()
+        {
+            //TODO
+            return new byte[0];
+        }
+
+        static public CMDDirMove parse(byte[] data)
+        {
+            using (MemoryStream ms = new MemoryStream(data))
+            {
+                var res = new CMDDirMove();
+                res.srcpath = ParseUtils.readString(ms);
+                res.dstpath = ParseUtils.readString(ms);
+                return res;
+            }
+
+        }
+
+    }
+
+    class CMDDirLS
+    {
+        public string path;
+
+        public CMDDirLS()
+        {
+
+        }
+
+        public byte[] to_bytes()
+        {
+            //TODO
+            return new byte[0];
+        }
+
+        static public CMDDirLS parse(byte[] data)
+        {
+            using (MemoryStream ms = new MemoryStream(data))
+            {
+                var res = new CMDDirLS();
+                res.path = ParseUtils.readString(ms);
+                return res;
+            }
+
+        }
+
+    }
+
+    class CMDDirRM
+    {
+        public string path;
+
+        public CMDDirRM()
+        {
+
+        }
+
+        public byte[] to_bytes()
+        {
+            //TODO
+            return new byte[0];
+        }
+
+        static public CMDDirRM parse(byte[] data)
+        {
+            using (MemoryStream ms = new MemoryStream(data))
+            {
+                var res = new CMDDirRM();
+                res.path = ParseUtils.readString(ms);
+                return res;
+            }
+
+        }
+
+    }
+
+    class CMDDirMK
+    {
+        public string path;
+
+        public CMDDirMK()
+        {
+
+        }
+
+        public byte[] to_bytes()
+        {
+            //TODO
+            return new byte[0];
+        }
+
+        static public CMDDirMK parse(byte[] data)
+        {
+            using (MemoryStream ms = new MemoryStream(data))
+            {
+                var res = new CMDDirMK();
+                res.path = ParseUtils.readString(ms);
+                return res;
+            }
+
+        }
+    }
+
+    class CMDFileCopy
+    {
+        public string srcpath;
+        public string dstpath;
+
+        public CMDFileCopy()
+        {
+
+        }
+
+        public byte[] to_bytes()
+        {
+            //TODO
+            return new byte[0];
+        }
+
+        static public CMDFileCopy parse(byte[] data)
+        {
+            using (MemoryStream ms = new MemoryStream(data))
+            {
+                var res = new CMDFileCopy();
+                res.srcpath = ParseUtils.readString(ms);
+                res.dstpath = ParseUtils.readString(ms);
+                return res;
+            }
+
+        }
+
+    }
+
+    class CMDFileMove
+    {
+        public string srcpath;
+        public string dstpath;
+
+        public CMDFileMove()
+        {
+
+        }
+
+        public byte[] to_bytes()
+        {
+            //TODO
+            return new byte[0];
+        }
+
+        static public CMDFileMove parse(byte[] data)
+        {
+            using (MemoryStream ms = new MemoryStream(data))
+            {
+                var res = new CMDFileMove();
+                res.srcpath = ParseUtils.readString(ms);
+                res.dstpath = ParseUtils.readString(ms);
+                return res;
+            }
+        }
+    }
+
+    class CMDFileOpen
+    {
+        public string path;
+        public string mode;
+
+        public CMDFileOpen()
+        {
+
+        }
+
+        public byte[] to_bytes()
+        {
+            //TODO
+            return new byte[0];
+        }
+
+        static public CMDFileOpen parse(byte[] data)
+        {
+            using (MemoryStream ms = new MemoryStream(data))
+            {
+                var res = new CMDFileOpen();
+                res.path = ParseUtils.readString(ms);
+                res.mode = ParseUtils.readString(ms);
+                return res;
+            }
+        }
+    }
+
+
+    class CMDFileRead
+    {
+        public uint size;
+        public UInt64 offset;
+
+        public CMDFileRead()
+        {
+
+        }
+
+        public byte[] to_bytes()
+        {
+            //TODO
+            return new byte[0];
+        }
+
+        static public CMDFileRead parse(byte[] data)
+        {
+            using (MemoryStream ms = new MemoryStream(data))
+            {
+                var res = new CMDFileRead();
+                res.size = ParseUtils.readUint32(ms);
+                res.offset = ParseUtils.readUint64(ms);
+                return res;
+            }
+        }
+    }
+
+    class CMDFileRM
+    {
+        public string path;
+
+        public CMDFileRM()
+        {
+
+        }
+
+        public byte[] to_bytes()
+        {
+            //TODO
+            return new byte[0];
+        }
+
+        static public CMDFileRM parse(byte[] data)
+        {
+            using (MemoryStream ms = new MemoryStream(data))
+            {
+                var res = new CMDFileRM();
+                res.path = ParseUtils.readString(ms);
+                return res;
+            }
+        }
+    }
+
+    class CMDFileStat
+    {
+
+        public CMDFileStat()
+        {
+
+        }
+
+        public byte[] to_bytes()
+        {
+            //TODO
+            return new byte[0];
+        }
+
+        static public CMDFileStat parse(byte[] data)
+        {
+            return new CMDFileStat();
+        }
+    }
+
+    class CMDFileData
+    {
+        public UInt64 offset;
+        public byte[] data;
+
+        public CMDFileData()
+        {
+
+        }
+
+        public byte[] to_bytes()
+        {
+            using(MemoryStream ms = new MemoryStream())
+            {
+                ParseUtils.writeUint64(ms, offset);
+                ParseUtils.writeBytes(ms, data);
+                return ms.ToArray();
+            }
+        }
+
+        static public CMDFileData parse(byte[] data)
+        {
+            using (MemoryStream ms = new MemoryStream(data))
+            {
+                var res = new CMDFileData();
+                res.offset = ParseUtils.readUint64(ms);
+                res.data = ParseUtils.readBytes(ms);
+                return res;
+            }
+        }
+    }
+
+    class WSNFileEntry
+    {
+        public string root;
+        public string name;
+        public bool is_dir;
+        public UInt64 size;
+        public DateTime atime;
+        public DateTime mtime;
+        public DateTime ctime;
+
+        public WSNFileEntry()
+        {
+
+        }
+
+        public byte[] to_bytes()
+        {
+            using (MemoryStream ms = new MemoryStream())
+            {
+                ParseUtils.writeString(ms, root);
+                ParseUtils.writeString(ms, name);
+                ParseUtils.writeBool(ms, is_dir);
+                ParseUtils.writeUint64(ms, size);
+                ParseUtils.writeUint64(ms, (ulong)atime.ToFileTimeUtc());
+                ParseUtils.writeUint64(ms, (ulong)mtime.ToFileTimeUtc());
+                ParseUtils.writeUint64(ms, (ulong)ctime.ToFileTimeUtc());
+                return ms.ToArray();
+            }
+        }
+
+        static public WSNFileEntry parse(byte[] data)
+        {
+            throw new NotImplementedException();
+        }
+
+        static public WSNFileEntry fromFileInfo(FileInfo file)
+        {
+            WSNFileEntry wSNFileEntry = new WSNFileEntry();
+            wSNFileEntry.root = file.DirectoryName;
+            wSNFileEntry.name = file.Name;
+            wSNFileEntry.size = (ulong)file.Length;
+            wSNFileEntry.ctime = file.CreationTime;
+            wSNFileEntry.atime = file.LastAccessTime;
+            wSNFileEntry.mtime = file.LastWriteTime;
+            wSNFileEntry.is_dir = false;
+            return wSNFileEntry;
+
+        }
+    }
+
+
+
+
 }

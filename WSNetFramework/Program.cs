@@ -1,6 +1,4 @@
-﻿#define SMBPIPESERVER
-
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
@@ -12,11 +10,9 @@ namespace WSNetFramework
     {
         static void Main(string[] args)
         {
-            #if WEBSOCKETSERVER
             MainServerWS(args);
-            #elif SMBPIPESERVER
-            MainSMBPipeServer(args);
-            #endif
+            //MainSMBPipeServer(args);
+
 
         }
 
