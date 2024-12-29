@@ -5,6 +5,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Xml.Linq;
 using System.CodeDom;
+using System.Security.Cryptography;
+using System.Security.Policy;
 
 namespace WSNet
 {
