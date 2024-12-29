@@ -103,8 +103,9 @@ namespace WSNet
         public string cpuarch;
         public string hostname;
         public string usersid;
+        public string platform;
 
-        public CMDInfoReply(string pid, string username, string domain, string logonserver, string cpuarch, string hostname, string usersid)
+        public CMDInfoReply(string pid, string username, string domain, string logonserver, string cpuarch, string hostname, string usersid, string platform)
         {
             this.pid = pid;
             this.username = username;
@@ -113,6 +114,7 @@ namespace WSNet
             this.cpuarch = cpuarch;
             this.hostname = hostname;
             this.usersid = usersid;
+            this.platform = platform;
         }
 
         public byte[] to_bytes()
@@ -124,9 +126,10 @@ namespace WSNet
             byte[] bcpuarch = ParseUtils.writeString(cpuarch);
             byte[] bhostname = ParseUtils.writeString(hostname, "UTF16");
             byte[] busersid = ParseUtils.writeString(usersid);
+            byte[] bplatform = ParseUtils.writeString(platform);
 
 
-            byte[][] rest = { bpid, busername, bdomain, blogonserver, bcpuarch, bhostname, busersid };
+            byte[][] rest = { bpid, busername, bdomain, blogonserver, bcpuarch, bhostname, busersid, bplatform };
             return ParseUtils.Combine(rest);
         }
     }
