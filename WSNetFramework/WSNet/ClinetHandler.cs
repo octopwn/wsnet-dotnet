@@ -107,7 +107,12 @@ namespace WSNet
                                 }
                                 else
                                 {
-                                    throw new Exception("UDP client not implemented!");
+                                    SocketUDPClientSession socket = new SocketUDPClientSession(cmdhdr, cmd, this);
+                                    socketlookup.Add(tokenstr, socket);
+                                    bool res = await socket.connect();
+                                    if (!res)
+                                        socketlookup.Remove(tokenstr);
+                                    //throw new Exception("UDP client not implemented!");
                                 }
                             }
                             else
@@ -150,6 +155,23 @@ namespace WSNet
                             {
                                 await sendErr(cmdhdr.token, "No socket session found for token");
                             }                           
+                            break;
+                        }
+                    case CMDType.SDSRV:
+                        {
+                            SocketSession socket;
+                            if (socketlookup.TryGetValue(tokenstr, out socket))
+                            {
+                                bool res = await socket.send(cmdhdr);
+                                if (!res)
+                                    socketlookup.Remove(tokenstr);
+                            }
+                            else
+                            {
+                                // TODO: when servers are implemented, add the server object retrieval code part here!
+                                // keep the code above intact because the same type of packet will be used by UDP clients as well!
+                                await sendErr(cmdhdr.token, "No socket session found for token");
+                            }
                             break;
                         }
                     case CMDType.OK:
