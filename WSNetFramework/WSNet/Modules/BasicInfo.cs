@@ -218,23 +218,10 @@ namespace WSNet.Modules
             string cpuarch = BasicInfo.getCPUArch();
             string hostname = System.Net.Dns.GetHostEntry("").HostName;
             string usersid = System.Security.Principal.WindowsIdentity.GetCurrent().User.Value;
-            string platform = "UNKNOWN";
 
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
-                platform = "WINDOWS";
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            {
-                platform = "OSX";
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            {
-                platform = "LINUX";
-            }
-
-            CMDInfoReply res = new CMDInfoReply(pid, username, domain, logonserver, cpuarch, hostname, usersid, platform);
+            CMDInfoReply res = new CMDInfoReply(pid, username, domain, logonserver, cpuarch, hostname, usersid);
             return res.to_bytes();
+
         }
     }
 }

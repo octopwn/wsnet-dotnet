@@ -3,14 +3,7 @@ using System.Text;
 using System.Net;
 using System.Collections.Generic;
 using System.IO;
-<<<<<<< Updated upstream
-using System.Xml.Linq;
-using System.CodeDom;
-using System.Security.Cryptography;
-using System.Security.Policy;
-=======
 using System.Reflection;
->>>>>>> Stashed changes
 
 namespace WSNet.Protocol
 {
@@ -232,13 +225,7 @@ namespace WSNet.Protocol
         public string cpuarch;
         public string hostname;
         public string usersid;
-<<<<<<< Updated upstream
-        public string platform;
-
-        public CMDInfoReply(string pid, string username, string domain, string logonserver, string cpuarch, string hostname, string usersid, string platform)
-=======
         public CMDInfoReply(string pid, string username, string domain, string logonserver, string cpuarch, string hostname, string usersid)
->>>>>>> Stashed changes
         {
             this.pid = pid;
             this.username = username;
@@ -247,25 +234,10 @@ namespace WSNet.Protocol
             this.cpuarch = cpuarch;
             this.hostname = hostname;
             this.usersid = usersid;
-            this.platform = platform;
         }
 
         override public byte[] to_bytes()
         {
-<<<<<<< Updated upstream
-            byte[] bpid = ParseUtils.writeString(pid);
-            byte[] busername = ParseUtils.writeString(username, "UTF16");
-            byte[] bdomain = ParseUtils.writeString(domain, "UTF16");
-            byte[] blogonserver = ParseUtils.writeString(logonserver, "UTF16");
-            byte[] bcpuarch = ParseUtils.writeString(cpuarch);
-            byte[] bhostname = ParseUtils.writeString(hostname, "UTF16");
-            byte[] busersid = ParseUtils.writeString(usersid);
-            byte[] bplatform = ParseUtils.writeString(platform);
-
-
-            byte[][] rest = { bpid, busername, bdomain, blogonserver, bcpuarch, bhostname, busersid, bplatform };
-            return ParseUtils.Combine(rest);
-=======
             using(MemoryStream ms = new MemoryStream())
             {
                 ParseUtils.writeString(ms, pid);
@@ -282,7 +254,6 @@ namespace WSNet.Protocol
         new static public CMDInfoReply parse(MemoryStream ms)
         {
             throw new NotImplementedException();
->>>>>>> Stashed changes
         }
     }
 

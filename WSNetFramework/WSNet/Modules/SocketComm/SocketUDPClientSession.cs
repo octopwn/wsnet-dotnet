@@ -1,38 +1,22 @@
 ﻿using System;
-<<<<<<< Updated upstream
-using System.Net;
-using System.Net.Sockets;
-using System.Threading;
-using System.Threading.Tasks;
-
-namespace WSNet.SocketComm
-=======
 using System.Threading;
 using System.Threading.Tasks;
 using System.Net.Sockets;
 using WSNet.Protocol;
 
 namespace WSNet.Modules.SocketComm
->>>>>>> Stashed changes
 {
 
     class SocketUDPClientSession : SocketSession
     {
         string ip;
         int port;
-        byte[] token;
-<<<<<<< Updated upstream
         UdpClient client_sock;
-        WSNetClinetHandler handler;
-        CancellationTokenSource cts = new CancellationTokenSource();
-
-        public SocketUDPClientSession(CMDHeader cmdhdr, CMDConnect cmd, WSNetClinetHandler handler)
-=======
+        byte[] token;
         CancellationTokenSource cts = new CancellationTokenSource();
         ClinetHandler handler;
 
         public SocketUDPClientSession(CMDHeader cmdhdr, CMDConnect cmd, ClinetHandler handler)
->>>>>>> Stashed changes
         {
             this.initiator_cmdhdr = cmdhdr;
             this.initiator_cmd = cmd;
@@ -44,13 +28,6 @@ namespace WSNet.Modules.SocketComm
 
         public async Task<bool> connect()
         {
-<<<<<<< Updated upstream
-            try
-            {
-                UdpClient client_sock = new UdpClient(ip, port);
-                _ = listen();
-                return true;
-=======
                 try
                 {
                     client_sock = new UdpClient(ip, port);
@@ -62,7 +39,6 @@ namespace WSNet.Modules.SocketComm
                     await handler.sendErr(token, "Generic error -sockst connect- " + e.ToString());
                     return false;
                 }
->>>>>>> Stashed changes
             }
            
 
@@ -70,21 +46,6 @@ namespace WSNet.Modules.SocketComm
         {
             while (!cts.IsCancellationRequested)
             {
-<<<<<<< Updated upstream
-                await handler.sendErr(token, "Generic error -sockst connect- " + e.ToString());
-                return false;
-            }
-        }
-
-        public async Task listen()
-        {
-            while (!cts.IsCancellationRequested)
-            {
-                UdpReceiveResult res = await client_sock.ReceiveAsync();
-                IPEndPoint addr = res.RemoteEndPoint;
-                CMDSRVSD cmd = new CMDSRVSD(token, addr.Address.ToString(), addr.Port, res.Buffer);
-                await handler.sendServerSocketData(token, cmd);
-=======
                 try
                 {
                     UdpReceiveResult packet = await client_sock.ReceiveAsync();
@@ -99,7 +60,6 @@ namespace WSNet.Modules.SocketComm
                     await handler.sendErr(token, "Socket accept error " + e.ToString());
                     return;
                 }
->>>>>>> Stashed changes
             }
         }
 
@@ -113,27 +73,15 @@ namespace WSNet.Modules.SocketComm
         {
             try
             {
-<<<<<<< Updated upstream
-                CMDSRVSD cmd = CMDSRVSD.parse(cmdhdr.data);
-=======
                 CMDSRVSD cmd = (CMDSRVSD)cmdhdr.packet;
->>>>>>> Stashed changes
                 await client_sock.SendAsync(cmd.data, cmd.data.Length, cmd.ip, cmd.port);
                 return true;
             }
-            catch(Exception e)
+            catch (Exception e)
             {
-<<<<<<< Updated upstream
-                stop();
-                return false;
-            }
-        }
-
-=======
                 await handler.sendErr(token, "Socket send error " + e.ToString());
                 return false;
             }
         }
->>>>>>> Stashed changes
     }
 }

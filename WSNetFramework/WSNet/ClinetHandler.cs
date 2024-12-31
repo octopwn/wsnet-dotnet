@@ -138,19 +138,10 @@ namespace WSNet
                                 }
                                 else
                                 {
-<<<<<<< Updated upstream
-                                    SocketUDPClientSession socket = new SocketUDPClientSession(cmdhdr, cmd, this);
-                                    socketlookup.Add(tokenstr, socket);
-                                    bool res = await socket.connect();
-                                    if (!res)
-                                        socketlookup.Remove(tokenstr);
-                                    //throw new Exception("UDP client not implemented!");
-=======
                                     SocketUDPClientSession clientSession = new SocketUDPClientSession(cmdhdr, cmd, this);
                                     bool res = await clientSession.connect();
                                     if (res)
                                         socketlookup.Add(tokenstr, clientSession);
->>>>>>> Stashed changes
                                 }
                             }
                             else
@@ -197,20 +188,6 @@ namespace WSNet
                         }
                     case CMDType.SDSRV:
                         {
-<<<<<<< Updated upstream
-                            SocketSession socket;
-                            if (socketlookup.TryGetValue(tokenstr, out socket))
-                            {
-                                bool res = await socket.send(cmdhdr);
-                                if (!res)
-                                    socketlookup.Remove(tokenstr);
-                            }
-                            else
-                            {
-                                // TODO: when servers are implemented, add the server object retrieval code part here!
-                                // keep the code above intact because the same type of packet will be used by UDP clients as well!
-                                await sendErr(cmdhdr.token, "No socket session found for token");
-=======
                             SocketServerSession socket;
                             if(socketServerlookup.TryGetValue(tokenstr, out socket))
                             {
@@ -219,7 +196,6 @@ namespace WSNet
                             else
                             {
                                 await sendErr(cmdhdr.token, "No socket server session found for token");
->>>>>>> Stashed changes
                             }
                             break;
                         }
