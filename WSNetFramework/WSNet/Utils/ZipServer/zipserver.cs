@@ -11,7 +11,7 @@ using System.IO.Compression;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace WSNetFramework.WSNet.Utils.ZipServer
+namespace WSNet
 {
     public class ZipServer : IDisposable
     {
@@ -223,7 +223,7 @@ namespace WSNetFramework.WSNet.Utils.ZipServer
                     }
                 }
             }
-            catch (Exception e)
+            catch
             {
                 HttpListenerResponse httpListenerResponse = httpListenerContext.Response;
                 httpListenerResponse.StatusCode = (int)HttpStatusCode.InternalServerError;

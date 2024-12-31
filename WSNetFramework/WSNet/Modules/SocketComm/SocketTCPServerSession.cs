@@ -2,37 +2,46 @@ using System;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Collections.Generic;
+using WSNet.Protocol;
 
-namespace WSNet.SocketComm
+namespace WSNet.Modules.SocketComm
 {
     class SocketTCPServerClientSession{
-        WSNetClinetHandler handler;
+        ClinetHandler handler;
         TcpClient tcpClient;
+        NetworkStream stream;
         byte[] connectionToken;
         byte[] token;
         CancellationTokenSource cts = new CancellationTokenSource();
         string ip;
+        int port;
 
-        public SocketTCPServerClientSession(WSNetClinetHandler handler, TcpClient tcpClient, byte[] connectionToken, byte[] token){
+        public SocketTCPServerClientSession(ClinetHandler handler, TcpClient tcpClient, byte[] connectionToken, byte[] token){
             this.handler = handler;
             this.tcpClient = tcpClient;
             this.connectionToken = connectionToken;
             this.token = token;
             this.stream = this.tcpClient.GetStream();
             this.ip = ((System.Net.IPEndPoint)tcpClient.Client.RemoteEndPoint).Address.ToString();
+            this.port = ((System.Net.IPEndPoint)tcpClient.Client.RemoteEndPoint).Port;
         }
 
-        public override void stop()
+        public void stop()
         {
             cts.Cancel();
-            this.stream.Close();
-            client_sock.Close();
+            stream.Close();
+            tcpClient.Close();
             
         }
 
         public async Task recv()
         {
-                while (!cts.IsCancellationRequested)
+            // first we signal that a new connection has been creatred
+            CMDSRVSD notifyres = new CMDSRVSD(this.connectionToken, ip, port, new byte[0]);
+            await handler.sendServerSocketData(token, notifyres);
+
+            while (!cts.IsCancellationRequested)
                 {
                     try
                     {
@@ -42,9 +51,9 @@ namespace WSNet.SocketComm
                         {
                             throw new Exception("Socket terminated");
                         }
-                        byte[] res = new byte[amountRead];
-                        Array.Copy(data, res, amountRead);
-                        CMDSRVSD res = new CMDSRVSD(this.connectionToken, ip, 0, res);
+                        byte[] datares = new byte[amountRead];
+                        Array.Copy(data, datares, amountRead);
+                        CMDSRVSD res = new CMDSRVSD(this.connectionToken, ip, port, datares);
                         await handler.sendServerSocketData(token, res);
                     }
                     catch (Exception e)
@@ -56,13 +65,13 @@ namespace WSNet.SocketComm
                 }
         }
 
-        public override async Task<bool> send(CMDHeader cmdhdr)
+        public async Task<bool> send(CMDSRVSD cmd)
         {
             try
             {
                 if (!cts.IsCancellationRequested)
                 {
-                    await stream.WriteAsync(cmdhdr.data, 0, cmdhdr.data.Length, cts.Token).ConfigureAwait(false);
+                    await stream.WriteAsync(cmd.data, 0, cmd.data.Length, cts.Token).ConfigureAwait(false);
                 }
                 return true;
             }
@@ -85,9 +94,9 @@ namespace WSNet.SocketComm
         byte[] token;
         CancellationTokenSource cts = new CancellationTokenSource();
         Dictionary<string, SocketTCPServerClientSession> sessions = new Dictionary<string, SocketTCPServerClientSession>();
-        WSNetClinetHandler handler;
+        ClinetHandler handler;
 
-        public SocketTCPServerSession(CMDHeader cmdhdr, CMDConnect cmd, WSNetClinetHandler handler)
+        public SocketTCPServerSession(CMDHeader cmdhdr, CMDConnect cmd, ClinetHandler handler)
         {
             this.initiator_cmdhdr = cmdhdr;
             this.initiator_cmd = cmd;
@@ -106,31 +115,33 @@ namespace WSNet.SocketComm
         {
             try
             {
-                server_sock = new TcpListener(System.Net.IPAddress.Parse(ip), port);
+                server_sock = new TcpListener(System.Net.IPAddress.Parse(ip), port) { ExclusiveAddressUse = false };
                 server_sock.Start();
-                listenForClient();
+                await handler.sendContinue(token);
+                _ = listenForClient();
                 return true;
+
             }
             catch (Exception e)
             {
-                await handler.sendErr(token, "Generic error -sockst connect- " + e.ToString());
+                WSNETDebug.Log("[TCPServer] Error creating listener! Reason: " + e.ToString());
+                await handler.sendErr(token, "Generic error -TCP server- " + e.ToString());
                 return false;
             }
         }
 
-        private async listenForClient()
+        private async Task listenForClient()
         {
             while (!cts.IsCancellationRequested)
             {
                 try
                 {
                     TcpClient client = await server_sock.AcceptTcpClientAsync();
-                    SocketTCPServerSession session = new SocketTCPServerSession(initiator_cmdhdr, initiator_cmd, handler);
-                    session.client_sock = client;
-                    session.token = getConnectionToken();
-                    await handler.sendSocketSession(session);
-                    session.recv();
-                    sessions.Add(session.token, session);
+                    byte[] connectionToken = getConnectionToken();
+                    SocketTCPServerClientSession session = new SocketTCPServerClientSession(handler, client, connectionToken, initiator_cmdhdr.token);
+                    _ = session.recv();
+                    string tokenhex = BitConverter.ToString(connectionToken);
+                    sessions.Add(tokenhex, session);
                 }
                 catch (Exception e)
                 {
@@ -144,7 +155,7 @@ namespace WSNet.SocketComm
         public override void stop()
         {
             cts.Cancel();
-            client_sock.Close();
+            server_sock.Stop();
             foreach (var session in sessions)
             {
                 session.Value.stop();
@@ -156,15 +167,16 @@ namespace WSNet.SocketComm
         public override async Task<bool> send(CMDHeader cmdhdr)
         {
             try{
-                CMDSRVSD cmd = CMDSRVSD.parse(cmdhdr.data);
-                var session = sessions[cmd.connectionToken];
+                CMDSRVSD cmd = (CMDSRVSD)cmdhdr.packet;
+                string tokenhex = BitConverter.ToString(cmd.connectiontoken);
+                var session = sessions[tokenhex];
                 return await session.send(cmd);
             }
             catch (Exception e)
             {
                 await handler.sendErr(token, "Socket send error " + e.ToString());
                 return false;
-            },
+            }
         }
 
         

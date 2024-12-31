@@ -2,8 +2,9 @@
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using WSNet.Protocol;
 
-namespace WSNet.SocketComm
+namespace WSNet.Modules.SocketComm
 {
     class SocketTCPClientSession : SocketSession
     {
@@ -13,9 +14,9 @@ namespace WSNet.SocketComm
         byte[] token;
         CancellationTokenSource cts = new CancellationTokenSource();
         NetworkStream stream;
-        WSNetClinetHandler handler;
+        ClinetHandler handler;
 
-        public SocketTCPClientSession(CMDHeader cmdhdr, CMDConnect cmd, WSNetClinetHandler handler)
+        public SocketTCPClientSession(CMDHeader cmdhdr, CMDConnect cmd, ClinetHandler handler)
         {
             this.initiator_cmdhdr = cmdhdr;
             this.initiator_cmd = cmd;
@@ -30,7 +31,7 @@ namespace WSNet.SocketComm
             try
             {
                 await this.client_sock.ConnectAsync(ip, port);
-                recv();
+                _ = recv();
                 await handler.sendContinue(token);
                 return true;
             }

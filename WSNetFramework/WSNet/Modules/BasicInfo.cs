@@ -1,8 +1,9 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using WSNet.Protocol;
 
-namespace WSNet
+namespace WSNet.Modules
 {
     class BasicInfo
     {

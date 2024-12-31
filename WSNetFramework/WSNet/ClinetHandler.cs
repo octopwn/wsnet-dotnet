@@ -1,23 +1,22 @@
 ﻿using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using WSNet.SocketComm;
-using WSNet.SSPIProxy;
-using System.Net;
-using System.Linq;
-using System.Net.Sockets;
-using WSNetFramework.WSNet.Modules.SocketComm;
-using System.IO;
-using WSNetFramework.WSNet.Modules.Fileops;
-using System.Diagnostics;
+using WSNet.Modules;
+using WSNet.Modules.SocketComm;
+using WSNet.Modules.Fileops;
+using WSNet.Modules.SSPIProxy;
+using WSNet.Protocol;
 
 namespace WSNet
 {
-    class WSNetClinetHandler
+    class ClinetHandler
     {
         Transport transport;
         Dictionary<string, SocketSession> socketlookup = new Dictionary<string, SocketSession>();
+        Dictionary<string, SocketServerSession> socketServerlookup = new Dictionary<string, SocketServerSession>();
+        
         Dictionary<string, SSPISession> sspilookup = new Dictionary<string, SSPISession>();
         Dictionary<string, FileStream> filelookup = new Dictionary<string, FileStream>();
         Dictionary<string, string> filenamelookup = new Dictionary<string, string>();
@@ -30,24 +29,26 @@ namespace WSNet
 
         private async Task sendRaw(byte[] rawmessage)
         {
+            WSNETDebug.LogPacket(rawmessage, "SEND");
             await transport.Send(rawmessage);
         }
 
         public async Task sendOk(byte[] token)
         {
+            
             CMDHeader okhdr = new CMDHeader(CMDType.OK, token, new byte[0]);
-            await transport.Send(okhdr.to_bytes());
+            await sendRaw(okhdr.to_bytes());
         }
 
         public async Task sendContinue(byte[] token)
         {
             CMDHeader errhdr = new CMDHeader(CMDType.CONTINUE, token, new byte[0]);
-            await transport.Send(errhdr.to_bytes());
+            await sendRaw(errhdr.to_bytes());
         }
         public async Task sendErr(byte[] token, byte[] errdata)
         {
             CMDHeader errhdr = new CMDHeader(CMDType.ERR, token, errdata);
-            await transport.Send(errhdr.to_bytes());
+            await sendRaw(errhdr.to_bytes());
         }
 
         public async Task sendErr(byte[] token, string reason, int errcode = -1)
@@ -59,13 +60,13 @@ namespace WSNet
         public async Task sendSocketData(byte[] token, byte[] data)
         {
             CMDHeader cmd = new CMDHeader(CMDType.SD, token, data);
-            await transport.Send(cmd.to_bytes());
+            await sendRaw(cmd.to_bytes());
         }
 
         public async Task sendServerSocketData(byte[] token, CMDSRVSD res)
         {
             CMDHeader cmd = new CMDHeader(CMDType.SDSRV, token, res.to_bytes());
-            await transport.Send(cmd.to_bytes());
+            await sendRaw(cmd.to_bytes());
         }
 
         public void Stop()
@@ -74,20 +75,51 @@ namespace WSNet
             {
                 sess.stop();
             }
+            foreach(SocketServerSession sess in socketServerlookup.Values)
+            {
+                sess.stop(); 
+            }
+        
+            foreach(FileStream file in filelookup.Values)
+            {
+                file.Close();
+            }
+            foreach(SSPISession sspi in sspilookup.Values)
+            {
+                // todo: cleanup
+            }
+            filelookup = new Dictionary<string, FileStream>();
+            sspilookup = new Dictionary<string, SSPISession>();
+            socketlookup = new Dictionary<string, SocketSession>();
+            socketServerlookup = new Dictionary<string, SocketServerSession>();
+            filenamelookup = new Dictionary<string, string>();
             this.cts.Cancel();
 
         }
         async public Task processMessage(byte[] data)
         {
-            CMDHeader cmdhdr = CMDHeader.parse(data);
-            string tokenstr = BitConverter.ToString(cmdhdr.token); //need to convert it to string because dictionary lookups. (using byte array will destroy the switch statement)
+            CMDHeader cmdhdr = null;
+            string tokenstr = null;
+            try
+            {
+
+                cmdhdr = CMDHeader.parse(data);
+                tokenstr = BitConverter.ToString(cmdhdr.token); //need to convert it to string because dictionary lookups. (using byte array will destroy the switch statement)
+                WSNETDebug.Log("[IN][" + tokenstr + "]" + "[" + cmdhdr.type.ToString() + "]");
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.ToString());
+                return;
+            }
+            
             try
             {
                 switch (cmdhdr.type)
                 {
                     case CMDType.CONNECT:
                         {
-                            CMDConnect cmd = CMDConnect.parse(cmdhdr.data);
+                            CMDConnect cmd = (CMDConnect)(cmdhdr.packet);
                             if (socketlookup.ContainsKey(tokenstr))
                             {
                                 throw new Exception("Token already exists!");
@@ -99,20 +131,26 @@ namespace WSNet
                                 if(cmd.protocol == "TCP")
                                 {
                                     //creating TCP client
-                                    SocketTCPClientSession socket = new SocketTCPClientSession(cmdhdr, cmd, this);
-                                    socketlookup.Add(tokenstr, socket);
-                                    bool res = await socket.connect();
-                                    if (!res)
-                                        socketlookup.Remove(tokenstr);
+                                    SocketTCPClientSession clientSession = new SocketTCPClientSession(cmdhdr, cmd, this);
+                                    bool res = await clientSession.connect();
+                                    if (res)
+                                        socketlookup.Add(tokenstr, clientSession);
                                 }
                                 else
                                 {
+<<<<<<< Updated upstream
                                     SocketUDPClientSession socket = new SocketUDPClientSession(cmdhdr, cmd, this);
                                     socketlookup.Add(tokenstr, socket);
                                     bool res = await socket.connect();
                                     if (!res)
                                         socketlookup.Remove(tokenstr);
                                     //throw new Exception("UDP client not implemented!");
+=======
+                                    SocketUDPClientSession clientSession = new SocketUDPClientSession(cmdhdr, cmd, this);
+                                    bool res = await clientSession.connect();
+                                    if (res)
+                                        socketlookup.Add(tokenstr, clientSession);
+>>>>>>> Stashed changes
                                 }
                             }
                             else
@@ -121,22 +159,22 @@ namespace WSNet
                                 {
                                     if(cmd.bindtype == 1){
                                         //creating TCP server
-                                        //SocketTCPServerSession socket = new SocketTCPServerSession(cmdhdr, cmd, this);
-                                        //socketlookup.Add(tokenstr, socket);
-                                        //bool res = await socket.bind();
-                                        //if (!res)
-                                        //    socketlookup.Remove(tokenstr);
-                                        throw new Exception("TCP server not implemented!");
-
+                                        SocketTCPServerSession tcpServer = new SocketTCPServerSession(cmdhdr, cmd, this);
+                                        bool res = await tcpServer.serve();
+                                        if (res)
+                                            socketServerlookup.Add(tokenstr, tcpServer);
                                     }
                                     else
                                     {
-                                        throw new Exception("UDP server not implemented!");
+                                        throw new Exception("??? server not implemented!");
                                     }
                                 }
                                 else
                                 {
-                                    throw new Exception("UDP server not implemented!");
+                                        SocketUDPServerSession udpServer = new SocketUDPServerSession(cmdhdr, cmd, this);
+                                        bool res = await udpServer.serve(cmd.bindtype);
+                                        if (res)
+                                            socketServerlookup.Add(tokenstr, udpServer);
                                 }
                             }
                             break;
@@ -159,6 +197,7 @@ namespace WSNet
                         }
                     case CMDType.SDSRV:
                         {
+<<<<<<< Updated upstream
                             SocketSession socket;
                             if (socketlookup.TryGetValue(tokenstr, out socket))
                             {
@@ -171,6 +210,16 @@ namespace WSNet
                                 // TODO: when servers are implemented, add the server object retrieval code part here!
                                 // keep the code above intact because the same type of packet will be used by UDP clients as well!
                                 await sendErr(cmdhdr.token, "No socket session found for token");
+=======
+                            SocketServerSession socket;
+                            if(socketServerlookup.TryGetValue(tokenstr, out socket))
+                            {
+                                bool res = await socket.send(cmdhdr);
+                            }
+                            else
+                            {
+                                await sendErr(cmdhdr.token, "No socket server session found for token");
+>>>>>>> Stashed changes
                             }
                             break;
                         }
@@ -192,7 +241,7 @@ namespace WSNet
                         
                     case CMDType.KERBEROS:
                         {
-                            CMDKerberos cmd = CMDKerberos.parse(cmdhdr.data);
+                            CMDKerberos cmd = (CMDKerberos)cmdhdr.packet;
                             SSPISession sspi;
                             if (!sspilookup.TryGetValue(tokenstr, out sspi))
                             {
@@ -209,7 +258,7 @@ namespace WSNet
                         }
                     case CMDType.NTLMAUTH:
                         {
-                            CMDNTLMAuth cmd = CMDNTLMAuth.parse(cmdhdr.data);
+                            CMDNTLMAuth cmd = (CMDNTLMAuth)cmdhdr.packet;
                             SSPISession sspi;
                             if (!sspilookup.TryGetValue(tokenstr, out sspi))
                             {
@@ -227,7 +276,7 @@ namespace WSNet
                         }
                     case CMDType.NTLMCHALL:
                         {
-                            CMDNTLMChall cmd = CMDNTLMChall.parse(cmdhdr.data);
+                            CMDNTLMChall cmd = (CMDNTLMChall)cmdhdr.packet;
                             SSPISession sspi;
                             if (!sspilookup.TryGetValue(tokenstr, out sspi))
                             {
@@ -291,7 +340,7 @@ namespace WSNet
                     case CMDType.RESOLV:
                         {
                             CMDResolv result = new CMDResolv();
-                            CMDResolv packet = CMDResolv.parse(cmdhdr.data);
+                            CMDResolv packet = (CMDResolv)cmdhdr.packet;
                             result.ip_or_hostname = await DNSResolver.ResolveAsync(packet.ip_or_hostname);
                             CMDHeader hdr = new CMDHeader(CMDType.RESOLV, cmdhdr.token, result.to_bytes());
                             await sendRaw(hdr.to_bytes());
@@ -299,7 +348,7 @@ namespace WSNet
                         }
                     case CMDType.DIRRM:
                         {
-                            CMDDirRM packet = CMDDirRM.parse(cmdhdr.data);
+                            CMDDirRM packet = (CMDDirRM)cmdhdr.packet;
                             try
                             {
                                 if (Directory.Exists(packet.path))
@@ -316,7 +365,7 @@ namespace WSNet
                         }
                     case CMDType.DIRMK:
                         {
-                            CMDDirMK packet = CMDDirMK.parse(cmdhdr.data);
+                            CMDDirMK packet = (CMDDirMK)cmdhdr.packet;
                             try
                             {
                                 if (!Directory.Exists(packet.path))
@@ -334,7 +383,7 @@ namespace WSNet
                         }
                     case CMDType.DIRCOPY:
                         {
-                            CMDDirCopy packet = CMDDirCopy.parse(cmdhdr.data);
+                            CMDDirCopy packet = (CMDDirCopy)cmdhdr.packet;
                             try
                             {
                                 Fileops.CopyDirectory(packet.srcpath, packet.dstpath);
@@ -348,7 +397,7 @@ namespace WSNet
                         }
                     case CMDType.DIRMOVE:
                         {
-                            CMDDirMove packet = CMDDirMove.parse(cmdhdr.data);
+                            CMDDirMove packet = (CMDDirMove)cmdhdr.packet;
                             try
                             {
                                 Fileops.MoveDirectory(packet.srcpath, packet.dstpath);
@@ -362,19 +411,29 @@ namespace WSNet
                         }
                     case CMDType.DIRLS:
                         {
-                            CMDDirLS packet = CMDDirLS.parse(cmdhdr.data);
-                            foreach (WSNFileEntry fe in Fileops.ListDirectoryContents(packet.path))
+                            try
                             {
-                                CMDHeader hdr = new CMDHeader(CMDType.FILEENTRY, cmdhdr.token, fe.to_bytes());
-                                await sendRaw(hdr.to_bytes());
+                                CMDDirLS packet = (CMDDirLS)cmdhdr.packet;
+                                foreach (WSNFileEntry fe in Fileops.ListDirectoryContents(packet.path))
+                                {
+                                    CMDHeader hdr = new CMDHeader(CMDType.FILEENTRY, cmdhdr.token, fe.to_bytes());
+                                    await sendRaw(hdr.to_bytes());
+                                }
+                                await sendOk(cmdhdr.token);
+                                
+                            }
+                            catch(Exception e)
+                            {
+                                await sendErr(cmdhdr.token, e.ToString());
                             }
                             break;
+
                         }
                     case CMDType.FILECOPY:
                         {
                             try
                             {
-                                CMDFileCopy packet = CMDFileCopy.parse(cmdhdr.data);
+                                CMDFileCopy packet = (CMDFileCopy)cmdhdr.packet;
                                 File.Copy(packet.srcpath, packet.dstpath, true);
                                 await sendOk(cmdhdr.token);
                                 
@@ -389,7 +448,7 @@ namespace WSNet
                         {
                             try
                             {
-                                CMDFileMove packet = CMDFileMove.parse(cmdhdr.data);
+                                CMDFileMove packet = (CMDFileMove)cmdhdr.packet;
                                 File.Move(packet.srcpath, packet.dstpath);
                                 await sendOk(cmdhdr.token);
 
@@ -404,7 +463,7 @@ namespace WSNet
                         {
                             try
                             {
-                                CMDFileRM packet = CMDFileRM.parse(cmdhdr.data);
+                                CMDFileRM packet = (CMDFileRM)cmdhdr.packet;
                                 File.Delete(packet.path);
                                 await sendOk(cmdhdr.token);
                             }
@@ -418,7 +477,7 @@ namespace WSNet
                         {
                             try
                             {
-                                CMDFileOpen packet = CMDFileOpen.parse(cmdhdr.data);
+                                CMDFileOpen packet = (CMDFileOpen)cmdhdr.packet; 
                                 FileMode fileMode = FileMode.Open;
                                 FileStream temp = File.Open(packet.path, fileMode);
                                 filelookup.Add(tokenstr, temp);
@@ -435,7 +494,7 @@ namespace WSNet
                         {
                             try
                             {
-                                CMDFileRead packet = CMDFileRead.parse(cmdhdr.data);
+                                CMDFileRead packet = (CMDFileRead)cmdhdr.packet;
                                 FileStream temp;
                                 if (!filelookup.TryGetValue(tokenstr, out temp))
                                 {
@@ -459,7 +518,7 @@ namespace WSNet
                         {
                             try
                             {
-                                CMDFileData packet = CMDFileData.parse(cmdhdr.data);
+                                CMDFileData packet = (CMDFileData)cmdhdr.packet;
                                 FileStream temp;
                                 if (!filelookup.TryGetValue(tokenstr, out temp))
                                 {
@@ -479,7 +538,7 @@ namespace WSNet
                         {
                             try
                             {
-                                CMDFileStat packet = CMDFileStat.parse(cmdhdr.data);
+                                CMDFileStat packet = (CMDFileStat)cmdhdr.packet;
                                 string path;
                                 if (!filenamelookup.TryGetValue(tokenstr, out path))
                                 {
@@ -507,8 +566,9 @@ namespace WSNet
             }
             catch(Exception e)
             {
-                await sendErr(cmdhdr.token, "Error in message processing! " + e.ToString());
                 Console.WriteLine("Error in message processing! " + e.ToString());
+                await sendErr(cmdhdr.token, "Error in message processing! " + e.ToString());
+                
             }
             
         }

@@ -1,12 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using WSNet;
+using WSNet.Protocol;
 
-namespace WSNetFramework.WSNet.Modules.Fileops
+namespace WSNet.Modules.Fileops
 {
     internal class Fileops
     {

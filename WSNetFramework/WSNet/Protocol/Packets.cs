@@ -3,14 +3,18 @@ using System.Text;
 using System.Net;
 using System.Collections.Generic;
 using System.IO;
+<<<<<<< Updated upstream
 using System.Xml.Linq;
 using System.CodeDom;
 using System.Security.Cryptography;
 using System.Security.Policy;
+=======
+using System.Reflection;
+>>>>>>> Stashed changes
 
-namespace WSNet
+namespace WSNet.Protocol
 {
-    enum CMDType
+    public enum CMDType
     {
         OK = 0,
         ERR = 1,
@@ -52,12 +56,105 @@ namespace WSNet
         FILERM = 311,
         FILESTAT = 312,
     }
-    class CMDHeader
+
+    public static class ParserRegistry
     {
+        private static readonly IReadOnlyDictionary<CMDType, object> _noparse = new Dictionary<CMDType, object>
+        {
+            {CMDType.OK, null },
+            {CMDType.ERR,null },
+            {CMDType.NOP,null },
+            {CMDType.CONTINUE,null },
+            {CMDType.STOP,null },
+            {CMDType.DISCONNECT, null },
+            {CMDType.SD, null },
+        };
+        private static readonly IReadOnlyDictionary<CMDType, Type> _parsers = new Dictionary<CMDType, Type>
+    {
+        
+        { CMDType.ERR, typeof(CMDErr) },
+        { CMDType.CONNECT, typeof(CMDConnect) },
+        { CMDType.NTLMAUTH, typeof(CMDNTLMAuth) },
+        { CMDType.NTLMAUTHREPLY, typeof(CMDNTLMAuthReply) },
+        { CMDType.NTLMCHALL, typeof(CMDNTLMChall) },
+        { CMDType.NTLMCHALLREPLY, typeof(CMDNTLMChallengeReply) },
+        { CMDType.KERBEROS, typeof(CMDKerberosReply) },
+        { CMDType.KERBEROSREPLY, typeof(CMDKerberosReply) },
+        { CMDType.SESSIONKEYREPLY, typeof(CMDSessionKeyReply) },
+        { CMDType.SEQUENCEREPLY, typeof(CMDSequenceReply) },
+        { CMDType.SDSRV, typeof(CMDSRVSD) },
+        { CMDType.RESOLV, typeof(CMDResolv) },
+        { CMDType.DIRLS, typeof(CMDDirLS) },
+        { CMDType.DIRMK, typeof(CMDDirMK) },
+        { CMDType.DIRRM, typeof(CMDDirRM) },
+        { CMDType.DIRCOPY, typeof(CMDDirCopy) },
+        { CMDType.DIRMOVE, typeof(CMDDirMove) },
+        { CMDType.FILEOPEN, typeof(CMDFileOpen) },
+        { CMDType.FILEREAD, typeof(CMDFileRead) },
+        { CMDType.FILEDATA, typeof(CMDFileData) },
+        { CMDType.FILEENTRY, typeof(WSNFileEntry) },
+        { CMDType.FILECOPY, typeof(CMDFileCopy) },
+        { CMDType.FILEMOVE, typeof(CMDFileMove) },
+        { CMDType.FILERM, typeof(CMDFileRM) },
+        { CMDType.FILESTAT, typeof(CMDFileStat) },
+    };
+
+        public static CMDBase CreateParserInstance(Type parserType)
+        {
+            if (Activator.CreateInstance(parserType) is CMDBase parser)
+            {
+                return parser;
+            }
+            throw new InvalidOperationException($"Type {parserType} is not a valid CMDBase.");
+        }
+
+        public static CMDBase GetParser(CMDType type)
+        {
+            if (_parsers.TryGetValue(type, out var parserType))
+            {
+                return CreateParserInstance(parserType);
+            }
+            throw new InvalidOperationException($"Parser for command type '{type}' ({(int)type}) is not registered.");
+        }
+
+        public static CMDBase ParsePacket(CMDType type, MemoryStream ms)
+        {
+            if (_noparse.ContainsKey(type))
+                return null;
+            if (!_parsers.ContainsKey(type))
+            {
+                throw new Exception($"CMD type {type.ToString()} has no parser definition!");
+            }
+            var parserType = _parsers[type];
+
+            // Ensure the type is derived from CMDBase
+            if (parserType.IsSubclassOf(typeof(CMDBase)) && parserType.GetMethod("parse", BindingFlags.Static | BindingFlags.Public) != null)
+            {
+                // Call the static Parse method on the parser type
+                var parseMethod = parserType.GetMethod("parse");
+                return (CMDBase)parseMethod.Invoke(null, new object[] { ms });
+            }
+
+            throw new InvalidOperationException($"No valid static Parse method found for type {parserType.Name}");
+        }
+    }
+
+
+    public class CMDBase
+    {
+        public CMDBase() { }
+        public CMDBase(byte[] data) { }
+        virtual public byte[] to_bytes() { throw new NotImplementedException(); }
+        static public CMDBase parse(MemoryStream ms) { throw new NotImplementedException(); }
+    }
+
+    class CMDHeader : CMDBase
+        {
         public int total_length;
         public CMDType type;
         public byte[] token = new byte[16];
         public byte[] data;
+        public CMDBase packet;
 
         public CMDHeader()
         {
@@ -72,30 +169,60 @@ namespace WSNet
 
         }
 
-        static public CMDHeader parse(byte[] data)
+        public CMDHeader(MemoryStream ms, bool parsePacket = true)
         {
-            CMDHeader cmdhdr = new CMDHeader();
-            cmdhdr.total_length = (int)ParseUtils.readUint32(data, 0);
-            cmdhdr.type = (CMDType)ParseUtils.readUshort(data, 4);
-            Array.Copy(data, 6, cmdhdr.token, 0, 16);
-            cmdhdr.data = new byte[data.Length - 22];
-            Array.Copy(data, 22, cmdhdr.data, 0, cmdhdr.data.Length);
-            return cmdhdr;
+            total_length = (int)ParseUtils.readUint32(ms);
+            type = (CMDType)ParseUtils.readUshort(ms);
+            token = new byte[16];
+            ms.Read(token, 0, 16);
+            data = new byte[total_length - 22];
+            ms.Read(data, 0, data.Length);
+            ms.Seek(22, SeekOrigin.Begin);
+            if (parsePacket)
+                packet = ParserRegistry.ParsePacket(type, ms);
         }
 
-        public byte[] to_bytes()
+        new static public CMDHeader parse(MemoryStream ms)
         {
+            return new CMDHeader(ms);
+        }
 
+        static public CMDHeader parse(byte[] data)
+        {
+            using(MemoryStream ms = new MemoryStream(data))
+            {
+                return new CMDHeader(ms);
+            }
+        }
+
+        static public CMDHeader parseHeader(byte[] data)
+        {
+            using (MemoryStream ms = new MemoryStream(data))
+            {
+                return new CMDHeader(ms, false);
+            }
+        }        
+
+        override public byte[] to_bytes()
+        {
             total_length = data.Length + 22;
-            byte[] blen = ParseUtils.writeUint32((uint)total_length);
-            byte[] btype = ParseUtils.writeUShort((ushort)type);
+            using (MemoryStream ms = new MemoryStream())
+            {
+                ParseUtils.writeUint32(ms, (uint)total_length);
+                ParseUtils.writeUShort(ms, (ushort)type);
+                ms.Write(token, 0, token.Length);
+                ms.Write(data, 0, data.Length);
+                return ms.ToArray();
+            }
+        }
 
-            byte[][] rest = { blen, btype, token, data };
-            return ParseUtils.Combine(rest);
+        public string pretty()
+        {
+            return $"[{BitConverter.ToString(token)}][{type.ToString()}]";
         }
     }
 
-    class CMDInfoReply
+    class CMDInfoReply : CMDBase
     {
         //pid, username, domain, logonserver, cpuarch, hostname
         public string pid;
@@ -105,9 +232,13 @@ namespace WSNet
         public string cpuarch;
         public string hostname;
         public string usersid;
+<<<<<<< Updated upstream
         public string platform;
 
         public CMDInfoReply(string pid, string username, string domain, string logonserver, string cpuarch, string hostname, string usersid, string platform)
+=======
+        public CMDInfoReply(string pid, string username, string domain, string logonserver, string cpuarch, string hostname, string usersid)
+>>>>>>> Stashed changes
         {
             this.pid = pid;
             this.username = username;
@@ -119,8 +250,9 @@ namespace WSNet
             this.platform = platform;
         }
 
-        public byte[] to_bytes()
+        override public byte[] to_bytes()
         {
+<<<<<<< Updated upstream
             byte[] bpid = ParseUtils.writeString(pid);
             byte[] busername = ParseUtils.writeString(username, "UTF16");
             byte[] bdomain = ParseUtils.writeString(domain, "UTF16");
@@ -133,12 +265,30 @@ namespace WSNet
 
             byte[][] rest = { bpid, busername, bdomain, blogonserver, bcpuarch, bhostname, busersid, bplatform };
             return ParseUtils.Combine(rest);
+=======
+            using(MemoryStream ms = new MemoryStream())
+            {
+                ParseUtils.writeString(ms, pid);
+                ParseUtils.writeString(ms, username, "UTF16");
+                ParseUtils.writeString(ms, domain, "UTF16");
+                ParseUtils.writeString(ms, logonserver, "UTF16");
+                ParseUtils.writeString(ms, cpuarch);
+                ParseUtils.writeString(ms, hostname, "UTF16");
+                ParseUtils.writeString(ms, usersid);
+                return ms.ToArray();
+            }
+        }
+
+        new static public CMDInfoReply parse(MemoryStream ms)
+        {
+            throw new NotImplementedException();
+>>>>>>> Stashed changes
         }
     }
 
 
-    class CMDErr
-    {
+    class CMDErr : CMDBase
+        {
         int err;
         string errormsg;
 
@@ -152,20 +302,26 @@ namespace WSNet
             this.errormsg = errormsg;
         }
 
-        public byte[] to_bytes()
+        override public byte[] to_bytes()
         {
-            byte[] berr = ParseUtils.writeString(err.ToString());
-            byte[] berrormsg = ParseUtils.writeString(errormsg);
+            using (MemoryStream ms = new MemoryStream())
+            {
+                ParseUtils.writeString(ms, err.ToString());
+                ParseUtils.writeString(ms, errormsg);
+                return ms.ToArray();
+            }
+        }
 
-            byte[][] rest = { berr, berrormsg };
-            return ParseUtils.Combine(rest);
+        new static public CMDErr parse(MemoryStream ms)
+        {
+            throw new NotImplementedException();
         }
 
     }
 
 
-    class CMDConnect
-    {
+    class CMDConnect : CMDBase
+        {
         public string protocol;
         public bool bind;
         public int iptype;
@@ -177,48 +333,53 @@ namespace WSNet
         {
 
         }
+        override public byte[] to_bytes()
+        { 
+            throw new NotImplementedException(); 
+        }
+       
 
-        static public CMDConnect parse(byte[] data)
+        new static public CMDConnect parse(MemoryStream ms)
         {
-            int ptr = 0;
             CMDConnect cmd = new CMDConnect();
             byte[] pb = new byte[3];
-            Array.Copy(data, pb, 3);
+            ms.Read(pb, 0, 3);
             cmd.protocol = Encoding.ASCII.GetString(pb);
-            if (data[3] == 0) cmd.bind = false;
-            else cmd.bind = true;
-            cmd.iptype = data[4];
-            if (cmd.iptype == 4)
+            cmd.bind = ParseUtils.readBool(ms);
+            cmd.iptype = ms.ReadByte();
+            if(cmd.iptype == 4)
             {
                 byte[] bip = new byte[4];
-                Array.Copy(data, 5, bip, 0, 4);
+                ms.Read(bip, 0, 4);
                 cmd.ip = new IPAddress(bip).ToString();
-                cmd.port = (int)ParseUtils.readUshort(data, 9);
-                ptr = 11;
+                cmd.port = (int)ParseUtils.readUshort(ms);
             }
             else if (cmd.iptype == 6)
             {
                 byte[] bip = new byte[16];
-                Array.Copy(data, 5, bip, 0, 16);
+                ms.Read(bip, 0, 16);
                 cmd.ip = new IPAddress(bip).ToString();
-                cmd.port = (int)ParseUtils.readUshort(data, 22);
-                ptr = 24;
+                cmd.port = (int)ParseUtils.readUshort(ms);
             }
             else if (cmd.iptype == 0xff)
             {
-                cmd.ip = ParseUtils.readString(data, 5);
-                cmd.port = (int)ParseUtils.readUshort(data, 9 + cmd.ip.Length);
-                ptr = 11 + cmd.ip.Length;
+                cmd.ip = ParseUtils.readString(ms);
+                cmd.port = (int)ParseUtils.readUshort(ms);
             }
             else throw new Exception("Unknown IP type " + cmd.iptype.ToString());
-            cmd.bindtype = data[ptr];
-
+            cmd.bindtype = ms.ReadByte();
+            WSNETDebug.Log(cmd.ToString());
             return cmd;
+        }
+
+        public override string ToString()
+        {
+            return $"[CMDConnect] protocol:{protocol} bind:{bind.ToString()} iptype: {iptype} ip: {ip} port:{port} bindtype:{bindtype}";
         }
 
     }
 
-    class CMDAuthErr
+    class CMDAuthErr : CMDBase
     {
         int err;
         string errormsg;
@@ -233,18 +394,24 @@ namespace WSNet
             this.errormsg = errormsg;
         }
 
-        public byte[] to_bytes()
+        override public byte[] to_bytes()
         {
-            byte[] berr = ParseUtils.writeString(err.ToString());
-            byte[] berrormsg = ParseUtils.writeString(errormsg);
+            using (MemoryStream ms = new MemoryStream())
+            {
+                ParseUtils.writeString(ms, err.ToString());
+                ParseUtils.writeString(ms, errormsg);
+                return ms.ToArray();
+            }
+        }
 
-            byte[][] rest = { berr, berrormsg };
-            return ParseUtils.Combine(rest);
+        new static public CMDAuthErr parse(MemoryStream ms)
+        {
+            throw new NotImplementedException();
         }
 
     }
 
-    class CMDNTLMAuthReply
+    class CMDNTLMAuthReply : CMDBase
     {
         int statusres;
         int ctxres;
@@ -261,18 +428,26 @@ namespace WSNet
             this.authres = authres;
         }
 
-        public byte[] to_bytes()
+        new public byte[] to_bytes()
         {
-            byte[] berr = ParseUtils.writeString(statusres.ToString());
-            byte[] berrormsg = ParseUtils.writeString(ctxres.ToString());
-            byte[] bauthres = ParseUtils.writeBytes(authres);
+            using (MemoryStream ms = new MemoryStream())
+            {
+                ParseUtils.writeString(ms, statusres.ToString());
+                ParseUtils.writeString(ms, ctxres.ToString());
+                ParseUtils.writeBytes(ms, authres);
 
-            byte[][] rest = { berr, berrormsg, bauthres };
-            return ParseUtils.Combine(rest);
+                return ms.ToArray();
+            }
         }
+
+        new static public CMDNTLMAuthReply parse(MemoryStream ms)
+        {
+            throw new NotImplementedException();
+        }
+
     }
 
-    class CMDNTLMChallengeReply
+    class CMDNTLMChallengeReply : CMDBase
     {
         int statusres;
         int ctxres;
@@ -289,19 +464,25 @@ namespace WSNet
             this.authres = authres;
         }
 
-        public byte[] to_bytes()
+        new public byte[] to_bytes()
         {
-            byte[] berr = ParseUtils.writeString(statusres.ToString());
-            byte[] berrormsg = ParseUtils.writeString(ctxres.ToString());
-            byte[] bauthres = ParseUtils.writeBytes(authres);
+            using (MemoryStream ms = new MemoryStream())
+            {
+                ParseUtils.writeString(ms, statusres.ToString());
+                ParseUtils.writeString(ms, ctxres.ToString());
+                ParseUtils.writeBytes(ms, authres);
+                return ms.ToArray();
+            }
+        }
 
-            byte[][] rest = { berr, berrormsg, bauthres };
-            return ParseUtils.Combine(rest);
+        new static public CMDNTLMChallengeReply parse(MemoryStream ms)
+        {
+            throw new NotImplementedException();
         }
 
     }
 
-    class CMDKerberosReply
+    class CMDKerberosReply : CMDBase
     {
         int statusres;
         int ctxres;
@@ -318,19 +499,26 @@ namespace WSNet
             this.authres = authres;
         }
 
-        public byte[] to_bytes()
+        new public byte[] to_bytes()
         {
-            byte[] berr = ParseUtils.writeString(statusres.ToString());
-            byte[] berrormsg = ParseUtils.writeString(ctxres.ToString());
-            byte[] bauthres = ParseUtils.writeBytes(authres);
+            using(MemoryStream ms = new MemoryStream())
+            {
+                ParseUtils.writeString(ms, statusres.ToString());
+                ParseUtils.writeString(ms, ctxres.ToString());
+                ParseUtils.writeBytes(ms, authres);
+                return ms.ToArray();
 
-            byte[][] rest = { berr, berrormsg, bauthres };
-            return ParseUtils.Combine(rest);
+            }
+        }
+
+        new static public CMDKerberosReply parse(MemoryStream ms)
+        {
+            throw new NotImplementedException();
         }
 
     }
 
-    class CMDSessionKeyReply
+    class CMDSessionKeyReply : CMDBase
     {
         int statusres;
         byte[] sessionkey;
@@ -345,18 +533,24 @@ namespace WSNet
             this.sessionkey = sessionkey;
         }
 
-        public byte[] to_bytes()
+        new public byte[] to_bytes()
         {
-            byte[] berr = ParseUtils.writeString(statusres.ToString());
-            byte[] bauthres = ParseUtils.writeBytes(sessionkey);
+            using (MemoryStream ms = new MemoryStream())
+            {
+                ParseUtils.writeString(ms, statusres.ToString());
+                ParseUtils.writeBytes(ms, sessionkey);
+                return ms.ToArray();
+            }
+        }
 
-            byte[][] rest = { berr, bauthres };
-            return ParseUtils.Combine(rest);
+        new static public CMDSessionKeyReply parse(MemoryStream ms)
+        {
+            throw new NotImplementedException();
         }
 
     }
 
-    class CMDSequenceReply
+    class CMDSequenceReply : CMDBase
     {
         int statusres;
         byte[] response;
@@ -371,18 +565,24 @@ namespace WSNet
             this.response = response;
         }
 
-        public byte[] to_bytes()
+        new public byte[] to_bytes()
         {
-            byte[] berr = ParseUtils.writeString(statusres.ToString());
-            byte[] bauthres = ParseUtils.writeBytes(response);
+            using(MemoryStream ms = new MemoryStream())
+            {
+                ParseUtils.writeString(ms, statusres.ToString());
+                ParseUtils.writeBytes(response);
+                return ms.ToArray();
+            }
+        }
 
-            byte[][] rest = { berr, bauthres };
-            return ParseUtils.Combine(rest);
+        new static public CMDSequenceReply parse(MemoryStream ms)
+        {
+            throw new NotImplementedException();
         }
 
     }
 
-    class CMDNTLMAuth
+    class CMDNTLMAuth : CMDBase
     {
         public string username;
         public int credusage;
@@ -391,23 +591,20 @@ namespace WSNet
 
         public CMDNTLMAuth() { }
 
-        static public CMDNTLMAuth parse(byte[] data)
+
+
+        new static public CMDNTLMAuth parse(MemoryStream ms)
         {
             CMDNTLMAuth cmd = new CMDNTLMAuth();
-            int ptr = 0;
-            cmd.username = ParseUtils.readString(data, ptr);
-            if (cmd.username == null) ptr += 4;
-            else ptr += 4 + cmd.username.Length;
-            cmd.credusage = int.Parse(ParseUtils.readString(data, ptr));
-            ptr += 4 + cmd.credusage.ToString().Length;
-            cmd.ctxattr = int.Parse(ParseUtils.readString(data, ptr));
-            ptr += 4 + cmd.ctxattr.ToString().Length;
-            cmd.target = ParseUtils.readString(data, ptr);
+            cmd.username = ParseUtils.readString(ms);
+            cmd.credusage = int.Parse(ParseUtils.readString(ms));
+            cmd.ctxattr = int.Parse(ParseUtils.readString(ms));
+            cmd.target = ParseUtils.readString(ms);
             return cmd;
         }
     }
 
-    class CMDNTLMChall
+    class CMDNTLMChall : CMDBase
     {
         public byte[] authdata;
         public int ctxattr;
@@ -415,20 +612,17 @@ namespace WSNet
 
         public CMDNTLMChall() { }
 
-        static public CMDNTLMChall parse(byte[] data)
+        new static public CMDNTLMChall parse(MemoryStream ms)
         {
             CMDNTLMChall cmd = new CMDNTLMChall();
-            int ptr = 0;
-            cmd.authdata = ParseUtils.readBytes(data, ptr);
-            ptr = 4 + cmd.authdata.Length;
-            cmd.ctxattr = int.Parse(ParseUtils.readString(data, ptr));
-            ptr += 4 + cmd.ctxattr.ToString().Length;
-            cmd.target = ParseUtils.readString(data, ptr);
+            cmd.authdata = ParseUtils.readBytes(ms);
+            cmd.ctxattr = int.Parse(ParseUtils.readString(ms));
+            cmd.target = ParseUtils.readString(ms);
             return cmd;
         }
     }
 
-    class CMDKerberos
+    class CMDKerberos : CMDBase
     {
         public string username;
         public int credusage;
@@ -438,25 +632,20 @@ namespace WSNet
 
         public CMDKerberos() { }
 
-        static public CMDKerberos parse(byte[] data)
+
+        new static public CMDKerberos parse(MemoryStream ms)
         {
             CMDKerberos cmd = new CMDKerberos();
-            int ptr = 0;
-            cmd.username = ParseUtils.readString(data, ptr);
-            if (cmd.username == null) ptr += 4;
-            else ptr += 4 + cmd.username.Length;
-            cmd.credusage = int.Parse(ParseUtils.readString(data, ptr));
-            ptr += 4 + cmd.credusage.ToString().Length;
-            cmd.ctxattr = int.Parse(ParseUtils.readString(data, ptr));
-            ptr += 4 + cmd.ctxattr.ToString().Length;
-            cmd.target = ParseUtils.readString(data, ptr);
-            ptr += 4 + cmd.target.Length;
-            cmd.authdata = ParseUtils.readBytes(data, ptr);
+            cmd.username = ParseUtils.readString(ms);
+            cmd.credusage = int.Parse(ParseUtils.readString(ms));
+            cmd.ctxattr = int.Parse(ParseUtils.readString(ms));
+            cmd.target = ParseUtils.readString(ms);
+            cmd.authdata = ParseUtils.readBytes(ms);
             return cmd;
         }
     }
 
-    class CMDSRVSD
+    class CMDSRVSD : CMDBase
     {
         public byte[] connectiontoken;
         public byte[] data;
@@ -491,40 +680,71 @@ namespace WSNet
                     iptype = 0xff;
                 }
             }
-            catch (Exception e)
+            catch
             {
                 iptype = 0xff;
             }
         }
 
-        public byte[] to_bytes()
+        new public byte[] to_bytes()
         {
-            byte[] bconnToken = ParseUtils.writeBytes(connectiontoken);
-            byte[] biptype = ParseUtils.writeUShort((ushort)iptype);
-            byte[] bip;
-            try
+            using(MemoryStream ms = new MemoryStream())
             {
-                IPAddress ip = IPAddress.Parse(this.ip);
-                bip = ip.GetAddressBytes();
-            }
-            catch (Exception e)
-            {
-                bip = ParseUtils.writeString(this.ip);
-            }
+                ms.Write(connectiontoken, 0, connectiontoken.Length);
+                ms.WriteByte((byte)iptype);
+                byte[] bip;
+                try
+                {
+                    IPAddress ip = IPAddress.Parse(this.ip);
+                    bip = ip.GetAddressBytes();
+                }
+                catch
+                {
+                    bip = ParseUtils.writeString(this.ip);
+                }
 
-            byte[] bport = ParseUtils.writeUShort((ushort)port);
-            byte[][] rest = { bconnToken, biptype, bip, bport, data };
-            return ParseUtils.Combine(rest);
+                ms.Write(bip, 0, bip.Length);
+                ParseUtils.writeUShort(ms, (ushort)port);
+                ms.Write(data, 0, data.Length);
+                return ms.ToArray();
+            }
         }
 
-        static public CMDSRVSD parse(byte[] data)
+        new static public CMDSRVSD parse(MemoryStream ms)
         {
-            throw new Exception("TODO");
+            CMDSRVSD cmd = new CMDSRVSD();
+            cmd.connectiontoken = new byte[16];
+            ms.Read(cmd.connectiontoken, 0, cmd.connectiontoken.Length);
+            cmd.iptype = ms.ReadByte();
+            if (cmd.iptype == 4)
+            {
+                byte[] bip = new byte[4];
+                ms.Read(bip, 0, 4);
+                cmd.ip = new IPAddress(bip).ToString();
+            }
+            else if (cmd.iptype == 6)
+            {
+                byte[] bip = new byte[16];
+                ms.Read(bip, 0, 16);
+                cmd.ip = new IPAddress(bip).ToString();
+            }
+            else if (cmd.iptype == 0xFF)
+            {
+                cmd.ip = ParseUtils.readString(ms);
+            }
+            else
+            {
+                throw new Exception("Unknown IP version! " + cmd.iptype.ToString());
+            }
+            cmd.port = (int)ParseUtils.readUshort(ms);
+            cmd.data = new byte[(int)(ms.Length - ms.Position)];
+            ms.Read(cmd.data, 0, cmd.data.Length);
+            return cmd;
         }
 
     }
 
-    class CMDResolv
+    class CMDResolv : CMDBase
     {
         public List<string> ip_or_hostname;
 
@@ -533,7 +753,7 @@ namespace WSNet
 
         }
 
-        public byte[] to_bytes()
+        new public byte[] to_bytes()
         {
             using (MemoryStream ms = new MemoryStream())
             {
@@ -545,20 +765,16 @@ namespace WSNet
             
         }
 
-        static public CMDResolv parse(byte[] data)
+        new static public CMDResolv parse(MemoryStream ms)
         {
-            using (MemoryStream ms = new MemoryStream(data))
-            {
-                var res = new CMDResolv();
-                res.ip_or_hostname = ParseUtils.readStringListFromStream(ms);
-                return res;
-            }
-            
+            var res = new CMDResolv();
+            res.ip_or_hostname = ParseUtils.readStringListFromStream(ms);
+            return res;
         }
 
     }
 
-    class CMDDirCopy
+    class CMDDirCopy : CMDBase
     {
         public string srcpath;
         public string dstpath;
@@ -568,27 +784,21 @@ namespace WSNet
 
         }
 
-        public byte[] to_bytes()
+        new public byte[] to_bytes()
         {
-            //TODO
-            return new byte[0];
+            throw new NotImplementedException();
         }
-
-        static public CMDDirCopy parse(byte[] data)
+        new static public CMDDirCopy parse(MemoryStream ms)
         {
-            using (MemoryStream ms = new MemoryStream(data))
-            {
-                var res = new CMDDirCopy();
-                res.srcpath = ParseUtils.readString(ms);
-                res.dstpath = ParseUtils.readString(ms);
-                return res;
-            }
-
+            var res = new CMDDirCopy();
+            res.srcpath = ParseUtils.readString(ms);
+            res.dstpath = ParseUtils.readString(ms);
+            return res;
         }
 
     }
 
-    class CMDDirMove
+    class CMDDirMove : CMDBase
     {
         public string srcpath;
         public string dstpath;
@@ -598,27 +808,22 @@ namespace WSNet
 
         }
 
-        public byte[] to_bytes()
+       new  public byte[] to_bytes()
         {
-            //TODO
-            return new byte[0];
+            throw new NotImplementedException();
         }
 
-        static public CMDDirMove parse(byte[] data)
+        new static public CMDDirMove parse(MemoryStream ms)
         {
-            using (MemoryStream ms = new MemoryStream(data))
-            {
-                var res = new CMDDirMove();
-                res.srcpath = ParseUtils.readString(ms);
-                res.dstpath = ParseUtils.readString(ms);
-                return res;
-            }
-
+            var res = new CMDDirMove();
+            res.srcpath = ParseUtils.readString(ms);
+            res.dstpath = ParseUtils.readString(ms);
+            return res;
         }
 
     }
 
-    class CMDDirLS
+    class CMDDirLS : CMDBase
     {
         public string path;
 
@@ -627,26 +832,22 @@ namespace WSNet
 
         }
 
-        public byte[] to_bytes()
+        new public byte[] to_bytes()
         {
-            //TODO
-            return new byte[0];
+            throw new NotImplementedException();
         }
 
-        static public CMDDirLS parse(byte[] data)
+        new static public CMDDirLS parse(MemoryStream ms)
         {
-            using (MemoryStream ms = new MemoryStream(data))
-            {
-                var res = new CMDDirLS();
-                res.path = ParseUtils.readString(ms);
-                return res;
-            }
 
+            var res = new CMDDirLS();
+            res.path = ParseUtils.readString(ms);
+            return res;
         }
 
     }
 
-    class CMDDirRM
+    class CMDDirRM : CMDBase
     {
         public string path;
 
@@ -655,26 +856,21 @@ namespace WSNet
 
         }
 
-        public byte[] to_bytes()
+        new public byte[] to_bytes()
         {
-            //TODO
-            return new byte[0];
+            throw new NotImplementedException();
         }
 
-        static public CMDDirRM parse(byte[] data)
+        new static public CMDDirRM parse(MemoryStream ms)
         {
-            using (MemoryStream ms = new MemoryStream(data))
-            {
-                var res = new CMDDirRM();
-                res.path = ParseUtils.readString(ms);
-                return res;
-            }
-
+            var res = new CMDDirRM();
+            res.path = ParseUtils.readString(ms);
+            return res;
         }
 
     }
 
-    class CMDDirMK
+    class CMDDirMK : CMDBase
     {
         public string path;
 
@@ -683,25 +879,20 @@ namespace WSNet
 
         }
 
-        public byte[] to_bytes()
+        new public byte[] to_bytes()
         {
-            //TODO
-            return new byte[0];
+            throw new NotImplementedException();
         }
 
-        static public CMDDirMK parse(byte[] data)
+        new static public CMDDirMK parse(MemoryStream ms)
         {
-            using (MemoryStream ms = new MemoryStream(data))
-            {
-                var res = new CMDDirMK();
-                res.path = ParseUtils.readString(ms);
-                return res;
-            }
-
+            var res = new CMDDirMK();
+            res.path = ParseUtils.readString(ms);
+            return res;
         }
     }
 
-    class CMDFileCopy
+    class CMDFileCopy : CMDBase
     {
         public string srcpath;
         public string dstpath;
@@ -711,27 +902,22 @@ namespace WSNet
 
         }
 
-        public byte[] to_bytes()
+        new public byte[] to_bytes()
         {
-            //TODO
-            return new byte[0];
+            throw new NotImplementedException();
         }
 
-        static public CMDFileCopy parse(byte[] data)
+        new static public CMDFileCopy parse(MemoryStream ms)
         {
-            using (MemoryStream ms = new MemoryStream(data))
-            {
-                var res = new CMDFileCopy();
-                res.srcpath = ParseUtils.readString(ms);
-                res.dstpath = ParseUtils.readString(ms);
-                return res;
-            }
-
+            var res = new CMDFileCopy();
+            res.srcpath = ParseUtils.readString(ms);
+            res.dstpath = ParseUtils.readString(ms);
+            return res;
         }
 
     }
 
-    class CMDFileMove
+    class CMDFileMove : CMDBase
     {
         public string srcpath;
         public string dstpath;
@@ -741,25 +927,21 @@ namespace WSNet
 
         }
 
-        public byte[] to_bytes()
+        new public byte[] to_bytes()
         {
-            //TODO
-            return new byte[0];
+            throw new NotImplementedException();
         }
 
-        static public CMDFileMove parse(byte[] data)
+        new static public CMDFileMove parse(MemoryStream ms)
         {
-            using (MemoryStream ms = new MemoryStream(data))
-            {
-                var res = new CMDFileMove();
-                res.srcpath = ParseUtils.readString(ms);
-                res.dstpath = ParseUtils.readString(ms);
-                return res;
-            }
+            var res = new CMDFileMove();
+            res.srcpath = ParseUtils.readString(ms);
+            res.dstpath = ParseUtils.readString(ms);
+            return res;
         }
     }
 
-    class CMDFileOpen
+    class CMDFileOpen : CMDBase
     {
         public string path;
         public string mode;
@@ -769,26 +951,22 @@ namespace WSNet
 
         }
 
-        public byte[] to_bytes()
+        new public byte[] to_bytes()
         {
-            //TODO
-            return new byte[0];
+            throw new NotImplementedException();
         }
 
-        static public CMDFileOpen parse(byte[] data)
+        new static public CMDFileOpen parse(MemoryStream ms)
         {
-            using (MemoryStream ms = new MemoryStream(data))
-            {
-                var res = new CMDFileOpen();
-                res.path = ParseUtils.readString(ms);
-                res.mode = ParseUtils.readString(ms);
-                return res;
-            }
+            var res = new CMDFileOpen();
+            res.path = ParseUtils.readString(ms);
+            res.mode = ParseUtils.readString(ms);
+            return res;
         }
     }
 
 
-    class CMDFileRead
+    class CMDFileRead : CMDBase
     {
         public uint size;
         public UInt64 offset;
@@ -798,25 +976,21 @@ namespace WSNet
 
         }
 
-        public byte[] to_bytes()
+        new public byte[] to_bytes()
         {
-            //TODO
-            return new byte[0];
+            throw new NotImplementedException();
         }
 
-        static public CMDFileRead parse(byte[] data)
+        new static public CMDFileRead parse(MemoryStream ms)
         {
-            using (MemoryStream ms = new MemoryStream(data))
-            {
-                var res = new CMDFileRead();
-                res.size = ParseUtils.readUint32(ms);
-                res.offset = ParseUtils.readUint64(ms);
-                return res;
-            }
+            var res = new CMDFileRead();
+            res.size = ParseUtils.readUint32(ms);
+            res.offset = ParseUtils.readUint64(ms);
+            return res;
         }
     }
 
-    class CMDFileRM
+    class CMDFileRM : CMDBase
     {
         public string path;
 
@@ -825,24 +999,20 @@ namespace WSNet
 
         }
 
-        public byte[] to_bytes()
+        new public byte[] to_bytes()
         {
-            //TODO
-            return new byte[0];
+            throw new NotImplementedException();
         }
 
-        static public CMDFileRM parse(byte[] data)
+        new static public CMDFileRM parse(MemoryStream ms)
         {
-            using (MemoryStream ms = new MemoryStream(data))
-            {
-                var res = new CMDFileRM();
-                res.path = ParseUtils.readString(ms);
-                return res;
-            }
+            var res = new CMDFileRM();
+            res.path = ParseUtils.readString(ms);
+            return res;
         }
     }
 
-    class CMDFileStat
+    class CMDFileStat : CMDBase
     {
 
         public CMDFileStat()
@@ -850,19 +1020,18 @@ namespace WSNet
 
         }
 
-        public byte[] to_bytes()
+        new public byte[] to_bytes()
         {
-            //TODO
-            return new byte[0];
+            throw new NotImplementedException();
         }
 
-        static public CMDFileStat parse(byte[] data)
+        new static public CMDFileStat parse(MemoryStream ms)
         {
-            return new CMDFileStat();
+            return new CMDFileStat(); // this is empty, only token is needed here
         }
     }
 
-    class CMDFileData
+    class CMDFileData : CMDBase
     {
         public UInt64 offset;
         public byte[] data;
@@ -872,7 +1041,7 @@ namespace WSNet
 
         }
 
-        public byte[] to_bytes()
+        new public byte[] to_bytes()
         {
             using(MemoryStream ms = new MemoryStream())
             {
@@ -882,19 +1051,16 @@ namespace WSNet
             }
         }
 
-        static public CMDFileData parse(byte[] data)
+        new static public CMDFileData parse(MemoryStream ms)
         {
-            using (MemoryStream ms = new MemoryStream(data))
-            {
-                var res = new CMDFileData();
-                res.offset = ParseUtils.readUint64(ms);
-                res.data = ParseUtils.readBytes(ms);
-                return res;
-            }
+            var res = new CMDFileData();
+            res.offset = ParseUtils.readUint64(ms);
+            res.data = ParseUtils.readBytes(ms);
+            return res;
         }
     }
 
-    class WSNFileEntry
+    class WSNFileEntry : CMDBase
     {
         public string root;
         public string name;
@@ -909,7 +1075,7 @@ namespace WSNet
 
         }
 
-        public byte[] to_bytes()
+        new public byte[] to_bytes()
         {
             using (MemoryStream ms = new MemoryStream())
             {
@@ -924,7 +1090,7 @@ namespace WSNet
             }
         }
 
-        static public WSNFileEntry parse(byte[] data)
+        new static public WSNFileEntry parse(MemoryStream ms)
         {
             throw new NotImplementedException();
         }
@@ -940,7 +1106,6 @@ namespace WSNet
             wSNFileEntry.mtime = file.LastWriteTime;
             wSNFileEntry.is_dir = false;
             return wSNFileEntry;
-
         }
     }
 

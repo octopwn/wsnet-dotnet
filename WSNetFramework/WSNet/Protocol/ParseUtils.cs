@@ -4,12 +4,15 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
-using System.Threading.Tasks;
 
-namespace WSNet
+namespace WSNet.Protocol
 {
     class ParseUtils
     {
+        static public bool readBool(MemoryStream ms)
+        {
+            return Convert.ToBoolean(ms.ReadByte());
+        }
         static public uint readUint32(byte[] data, int startpos = 0)
         {
             byte[] lenb = new byte[4];

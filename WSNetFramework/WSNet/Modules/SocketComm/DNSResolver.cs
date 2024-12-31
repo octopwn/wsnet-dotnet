@@ -2,13 +2,11 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
-using System.Net.Sockets;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using WSNet;
+using WSNet.Protocol;
 
-namespace WSNetFramework.WSNet.Modules.SocketComm
+namespace WSNet.Modules.SocketComm
 {
     internal class DNSResolver
     {

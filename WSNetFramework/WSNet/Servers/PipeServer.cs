@@ -1,16 +1,13 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using System.Security.Principal;
 using System.Security.AccessControl;
 using System.IO;
 using System.IO.Pipes;
-using WSNet;
 using System.Threading;
+using WSNet.Protocol;
 
-namespace WSNet.Servers
+namespace WSNet.Servers.Pipe
 {
     class PipeTransport : Transport
     {
@@ -47,18 +44,22 @@ namespace WSNet.Servers
         }
     }
 
-    class PipeServer
+    class PipeServer : IDisposable
     {
         private int numThreads = 100;
         private string pipeName;
         private SemaphoreSlim pipeAccessLock;
         int maxPacketSize = 200 * 1024;
+        ClinetHandler ch;
+        PipeTransport pt;
+        NamedPipeServerStream pipeServer;
 
         public PipeServer(string pipename, int numThreads = 100)
         {
             this.pipeName = pipename;
             this.numThreads = numThreads;
             this.pipeAccessLock = new SemaphoreSlim(1, numThreads);
+            this.ch = new ClinetHandler();
         }
 
         static PipeSecurity CreateSystemIOPipeSecurity()
@@ -80,7 +81,7 @@ namespace WSNet.Servers
                 try
                 {
                     PipeSecurity pipeSecurity = CreateSystemIOPipeSecurity();
-                    NamedPipeServerStream pipeServer = new NamedPipeServerStream(pipeName,
+                    pipeServer = new NamedPipeServerStream(pipeName,
                                                PipeDirection.InOut,
                                                -1, //numThreads,
                                                PipeTransmissionMode.Message,
@@ -110,9 +111,8 @@ namespace WSNet.Servers
         private async void handlePipeClient(NamedPipeServerStream pipe, SemaphoreSlim semaphoreSlim)
         {
             
-            WSNetClinetHandler ch = new WSNetClinetHandler();
-            PipeTransport pt = new PipeTransport(pipe, semaphoreSlim);
-            ch.run(pt);
+            pt = new PipeTransport(pipe, semaphoreSlim);
+            _ = ch.run(pt);
             try
             {
                 while (pipe.IsConnected)
@@ -172,7 +172,44 @@ namespace WSNet.Servers
                 ch.Stop();
                 //pipe.Close();
             }
-            
+        }
+
+        public void Stop()
+        {
+            ch.Stop();
+            if (pipeServer != null)
+            {
+                pipeServer.Close();
+            }
+
+        }
+
+        public void Dispose()
+        {
+            Stop();
+        }
+
+        static public void StartMain(string[] args)
+        {
+            string pipename = "wsnet";
+            if (args.Length == 1)
+            {
+                if (args[0].ToLower() == "-h" || args[0].ToLower() == "--help" || args[0].ToLower() == "h" || args[0].ToLower() == "help")
+                {
+                    Console.WriteLine("WSNET smbpipe server.");
+                    Console.WriteLine("Usage: proxy.exe <listen_ip> <listen_port> <PFX file> <PFX password>");
+                    Console.WriteLine("PFX file and password only needed if you want a WS+SSL server");
+                    Console.WriteLine("Default values: listen_ip=127.0.0.1 listen_port=8100 no SSL");
+                    return;
+                }
+                pipename = args[0];
+            }
+
+            using (PipeServer ps = new PipeServer(pipename))
+            {
+                var task = ps.Run();
+                task.Wait();
+            }
         }
     }
 }

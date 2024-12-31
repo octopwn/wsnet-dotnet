@@ -1,14 +1,11 @@
 ﻿#define X86
 using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Threading.Tasks;
 using System.Threading;
 using System.Runtime.InteropServices;
 using System.ComponentModel;
-using WSNet;
+using WSNet.Protocol;
 
-namespace WSNet.SSPIProxy
+namespace WSNet.Modules.SSPIProxy
 {
     class SSPISession
     {
