@@ -61,6 +61,7 @@ namespace WSNet.Protocol
             {CMDType.STOP,null },
             {CMDType.DISCONNECT, null },
             {CMDType.SD, null },
+            {CMDType.GETINFO, null },
         };
         private static readonly IReadOnlyDictionary<CMDType, Type> _parsers = new Dictionary<CMDType, Type>
     {
@@ -225,7 +226,8 @@ namespace WSNet.Protocol
         public string cpuarch;
         public string hostname;
         public string usersid;
-        public CMDInfoReply(string pid, string username, string domain, string logonserver, string cpuarch, string hostname, string usersid)
+        public string platform;
+        public CMDInfoReply(string pid, string username, string domain, string logonserver, string cpuarch, string hostname, string usersid, string platform)
         {
             this.pid = pid;
             this.username = username;
@@ -234,6 +236,7 @@ namespace WSNet.Protocol
             this.cpuarch = cpuarch;
             this.hostname = hostname;
             this.usersid = usersid;
+            this.platform = platform;
         }
 
         override public byte[] to_bytes()
@@ -247,6 +250,7 @@ namespace WSNet.Protocol
                 ParseUtils.writeString(ms, cpuarch);
                 ParseUtils.writeString(ms, hostname, "UTF16");
                 ParseUtils.writeString(ms, usersid);
+                ParseUtils.writeString(ms, platform);
                 return ms.ToArray();
             }
         }
