@@ -4,6 +4,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Security.Cryptography.X509Certificates;
 using Fleck;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
+using System.Diagnostics;
 
 namespace WSNet.Servers.WebSocket
 {
@@ -32,6 +35,27 @@ namespace WSNet.Servers.WebSocket
         Dictionary<Guid, ClinetHandler> clientLookup;
 
         CancellationTokenSource cts;
+
+        static public List<string> ListIPAddresses()
+        {
+            var list = new List<string>();
+            foreach (var networkInterface in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (networkInterface.OperationalStatus == OperationalStatus.Up)
+                {
+                    var ipProperties = networkInterface.GetIPProperties();
+
+                    foreach (var address in ipProperties.UnicastAddresses)
+                    {
+                        if (address.Address.AddressFamily == AddressFamily.InterNetwork)
+                        {
+                            list.Add(address.Address.ToString());
+                        }
+                    }
+                }
+            }
+            return list;
+        }
 
         public WebSocketsServer(string ip, int port, bool secureURL = false)
         {
@@ -97,7 +121,7 @@ namespace WSNet.Servers.WebSocket
                     };
                     socket.OnMessage = message =>
                     {
-                        Console.WriteLine("String message is unexpected here!");
+                        WSNETDebug.Log("String message is unexpected here!");
                     };
                     socket.OnBinary = message =>
                     {
@@ -112,7 +136,19 @@ namespace WSNet.Servers.WebSocket
                     socket.Close();
                 }
             });
-            Console.Write(websocketUrl);
+            
+            if(ip == "0.0.0.0")
+            {
+                List<string> allinterfaces = new List<string>();
+                foreach (string otherip in ListIPAddresses())
+                {
+                    Console.WriteLine($"{proto}{otherip}:{port}/{uuid}");
+                }
+            }
+            else
+            {
+                Console.WriteLine(websocketUrl);
+            }
             await Task.Delay(Timeout.Infinite);
         }
 
@@ -129,11 +165,11 @@ namespace WSNet.Servers.WebSocket
         {
             Stop();
             clientLookup = new Dictionary<Guid, ClinetHandler>();
-        }
+        }       
 
         static public void StartMain(string[] args)
         {
-            string ip = "0.0.0.0";
+            string ip = "127.0.0.1";
             int port = 8700;
             if (args.Length == 1)
             {

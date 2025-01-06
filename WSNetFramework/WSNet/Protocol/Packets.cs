@@ -32,6 +32,8 @@ namespace WSNet.Protocol
         SEQUENCE = 19,
         SEQUENCEREPLY = 20,
 
+
+
         SDSRV = 200,
         RESOLV = 202,
 
@@ -62,6 +64,7 @@ namespace WSNet.Protocol
             {CMDType.DISCONNECT, null },
             {CMDType.SD, null },
             {CMDType.GETINFO, null },
+            { CMDType.SESSIONKEY, null },
         };
         private static readonly IReadOnlyDictionary<CMDType, Type> _parsers = new Dictionary<CMDType, Type>
     {
@@ -72,7 +75,7 @@ namespace WSNet.Protocol
         { CMDType.NTLMAUTHREPLY, typeof(CMDNTLMAuthReply) },
         { CMDType.NTLMCHALL, typeof(CMDNTLMChall) },
         { CMDType.NTLMCHALLREPLY, typeof(CMDNTLMChallengeReply) },
-        { CMDType.KERBEROS, typeof(CMDKerberosReply) },
+        { CMDType.KERBEROS, typeof(CMDKerberos) },
         { CMDType.KERBEROSREPLY, typeof(CMDKerberosReply) },
         { CMDType.SESSIONKEYREPLY, typeof(CMDSessionKeyReply) },
         { CMDType.SEQUENCEREPLY, typeof(CMDSequenceReply) },

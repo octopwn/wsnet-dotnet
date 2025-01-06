@@ -14,10 +14,10 @@ Upon starting the application, a WebSocket server is set up on `localhost` at po
 | Feature                 | Windows | Linux | Mac |
 |-------------------------|---------|-------|-----|
 | TCP Client              | ✔       | ✘     | ✘   |
-| TCP Server              | ✘       | ✘     | ✘   |
-| UDP Client              | ✘       | ✘     | ✘   |
-| UDP Server              | ✘       | ✘     | ✘   |
-| Local File Browser      | ✘       | ✘     | ✘   |
+| TCP Server              | ✔       | ✘     | ✘   |
+| UDP Client              | ✔       | ✘     | ✘   |
+| UDP Server              | ✔       | ✘     | ✘   |
+| Local File Browser      | ✔       | ✘     | ✘   |
 | Authentication Proxy    | ✔       | ✘     | ✘   |
 
 ## Getting Started

@@ -515,7 +515,7 @@ namespace WSNet.Modules.SSPIProxy
 
                 ContextAttributes = (uint)contextattrs;
 
-                if (authdata != null)
+                if (authdata != null && authdata.Length > 0)
                 {
                     MultipleSecBufferHelper sb = new MultipleSecBufferHelper(authdata, SecBufferType.SECBUFFER_TOKEN);
                     MultipleSecBufferHelper[] sbl = { sb };
