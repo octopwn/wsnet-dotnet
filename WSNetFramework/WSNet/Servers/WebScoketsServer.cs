@@ -7,6 +7,7 @@ using Fleck;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Diagnostics;
+using System.IO;
 
 namespace WSNet.Servers.WebSocket
 {
@@ -30,6 +31,7 @@ namespace WSNet.Servers.WebSocket
         string ip;
         int port;
         bool secureURL;
+        string path = "";
         string pfx_file = "";
         string pfx_password = "";
         Dictionary<Guid, ClinetHandler> clientLookup;
@@ -65,12 +67,13 @@ namespace WSNet.Servers.WebSocket
             clientLookup = new Dictionary<Guid, ClinetHandler>();
         }
 
-        public WebSocketsServer(string ip, int port, string pfx_file, string pfx_password, bool secureURL = false)
+        public WebSocketsServer(string ip, int port, string pfx_file, string pfx_password, bool secureURL = false, string path="")
         {
             this.ip = ip;
             this.port = port;
             this.pfx_password = pfx_file;
             this.pfx_file = pfx_file;
+            this.path = path;
             clientLookup = new Dictionary<Guid, ClinetHandler>();
             this.secureURL = secureURL;
         }
@@ -87,11 +90,15 @@ namespace WSNet.Servers.WebSocket
                 proto = "wss://";
             }
 
-            var uuid = "";
-            if (secureURL)
+            var uuid = this.path;
+            if (uuid.Length == 0)
             {
-                uuid = Guid.NewGuid().ToString();
+                if (secureURL)
+                {
+                    uuid = Guid.NewGuid().ToString();
+                }
             }
+            
             var websocketUrl = $"{proto}{ip}:{port}/{uuid}";
 
             var server = new WebSocketServer(websocketUrl, false);

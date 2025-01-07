@@ -64,7 +64,8 @@ namespace WSNet.Protocol
             {CMDType.DISCONNECT, null },
             {CMDType.SD, null },
             {CMDType.GETINFO, null },
-            { CMDType.SESSIONKEY, null },
+            {CMDType.SESSIONKEY, null },
+            {CMDType.SEQUENCE, null },
         };
         private static readonly IReadOnlyDictionary<CMDType, Type> _parsers = new Dictionary<CMDType, Type>
     {
