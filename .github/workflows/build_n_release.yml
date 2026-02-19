@@ -17,7 +17,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     
     - name: Install .NET Framework 4.7.2 Developer Pack
       run: |
@@ -36,7 +36,7 @@ jobs:
       run: msbuild WSNetFramework.sln /p:Configuration=Release /p:Platform="Any CPU"
 
     - name: Upload artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: wsnet_dotnet
         path: WSNetFramework\bin\Release\WSNetFramework.exe
@@ -48,3 +48,23 @@ jobs:
         files: WSNetFramework\bin\Release\WSNetFramework.exe
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Upload wsnet-dotnet source zip to R2 (staging)
+      if: github.event_name == 'push'
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      shell: bash
+      run: |
+        7z a -tzip wsnet_dotnet.zip . -x!.git -x!WSNetFramework/bin -x!WSNetFramework/obj -x!packages
+        npx wrangler r2 object put "octopwn-core-staging/wsnet/wsnet_dotnet.zip" --file="wsnet_dotnet.zip" --remote
+
+    - name: Upload wsnet-dotnet source zip to R2 (production)
+      if: github.event_name == 'release'
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      shell: bash
+      run: |
+        7z a -tzip wsnet_dotnet.zip . -x!.git -x!WSNetFramework/bin -x!WSNetFramework/obj -x!packages
+        npx wrangler r2 object put "octopwn-core/wsnet/wsnet_dotnet.zip" --file="wsnet_dotnet.zip" --remote
